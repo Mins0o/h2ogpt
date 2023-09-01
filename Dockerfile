@@ -30,6 +30,7 @@ RUN python3.10 -m pip install -r reqs_optional/requirements_optional_langchain.t
 RUN python3.10 -m pip install -r reqs_optional/requirements_optional_gpt4all.txt --extra-index-url https://download.pytorch.org/whl/cu118
 RUN python3.10 -m pip install -r reqs_optional/requirements_optional_langchain.gpllike.txt --extra-index-url https://download.pytorch.org/whl/cu118
 RUN python3.10 -m pip install -r reqs_optional/requirements_optional_langchain.urls.txt --extra-index-url https://download.pytorch.org/whl/cu118
+RUN python3.10 -m pip install -r reqs_optional/requirements_optional_faiss_cpu.txt --extra-index-url https://download.pytorch.org/whl/cu118
 
 RUN python3.10 -m pip install -r reqs_optional/requirements_optional_doctr.txt --extra-index-url https://download.pytorch.org/whl/cu118
 # go back to older onnx so Tesseract OCR still works
@@ -51,19 +52,20 @@ COPY . .
 
 ENV VLLM_CACHE=/workspace/.vllm_cache
 
-RUN sp=`python3.10 -c 'import site; print(site.getsitepackages()[0])'` && \
-    sed -i 's/posthog\.capture/return\n            posthog.capture/' $sp/chromadb/telemetry/posthog.py && \
-    cd $sp && \
-    rm -rf openai_vllm* && \
-    cp -a openai openai_vllm && \
-    cp -a openai-0.27.8.dist-info openai_vllm-0.27.8.dist-info && \
-    find openai_vllm -name '*.py' | xargs sed -i 's/from openai /from openai_vllm /g' && \
-    find openai_vllm -name '*.py' | xargs sed -i 's/openai\./openai_vllm./g' && \
-    find openai_vllm -name '*.py' | xargs sed -i 's/from openai\./from openai_vllm./g' && \
-    find openai_vllm -name '*.py' | xargs sed -i 's/import openai/import openai_vllm/g' && \
-    conda create -n vllm python=3.10 -y && \
-    /h2ogpt_conda/envs/vllm/bin/python3.10 -m pip install vllm ray pandas --extra-index-url https://download.pytorch.org/whl/cu118 && \
-    mkdir ${VLLM_CACHE}
+RUN sp=`python3.10 -c 'import site; print(site.getsitepackages()[0])'` && sed -i 's/posthog\.capture/return\n            posthog.capture/' $sp/chromadb/telemetry/posthog.py
+# RUN sp=`python3.10 -c 'import site; print(site.getsitepackages()[0])'` && \
+#     sed -i 's/posthog\.capture/return\n            posthog.capture/' $sp/chromadb/telemetry/posthog.py && \
+#     cd $sp && \
+#     rm -rf openai_vllm* && \
+#     cp -a openai openai_vllm && \
+#     cp -a openai-0.27.8.dist-info openai_vllm-0.27.8.dist-info && \
+#     find openai_vllm -name '*.py' | xargs sed -i 's/from openai /from openai_vllm /g' && \
+#     find openai_vllm -name '*.py' | xargs sed -i 's/openai\./openai_vllm./g' && \
+#     find openai_vllm -name '*.py' | xargs sed -i 's/from openai\./from openai_vllm./g' && \
+#     find openai_vllm -name '*.py' | xargs sed -i 's/import openai/import openai_vllm/g' && \
+#     conda create -n vllm python=3.10 -y && \
+#     /h2ogpt_conda/envs/vllm/bin/python3.10 -m pip install vllm ray pandas --extra-index-url https://download.pytorch.org/whl/cu118 && \
+#     mkdir ${VLLM_CACHE}
 
 EXPOSE 8888
 EXPOSE 7860
