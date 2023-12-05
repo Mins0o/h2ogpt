@@ -2,8 +2,10 @@ import ast
 import contextlib
 import functools
 import gc
+import getpass
 import hashlib
 import inspect
+import json
 import os
 import pathlib
 import pickle
@@ -16,9 +18,12 @@ import threading
 import time
 import traceback
 import zipfile
+import tarfile
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from typing import Tuple, Callable, Dict
+from queue import Queue, Empty
+from concurrent.futures import ThreadPoolExecutor
 
 import filelock
 import fire
@@ -131,9 +136,9 @@ def get_torch_allocated():
     return torch.cuda.memory_allocated()
 
 
-def get_device():
+def get_device(n_gpus=None):
     import torch
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and n_gpus != 0:
         device = "cuda"
     elif torch.backends.mps.is_built():
         device = "mps"
@@ -233,13 +238,50 @@ def _zip_data(root_dirs=None, zip_file=None, base_dir='./'):
     return zip_file, zip_file
 
 
+def tar_data(root_dirs=None, tar_file=None, base_dir='./', fail_any_exception=False):
+    try:
+        return _tar_data(tar_file=tar_file, base_dir=base_dir, root_dirs=root_dirs)
+    except Exception as e:
+        traceback.print_exc()
+        print('Exception in tar archiving: %s' % str(e))
+        if not fail_any_exception:
+            raise
+
+
+def _tar_data(root_dirs=None, tar_file=None, base_dir='./'):
+    if isinstance(root_dirs, str):
+        root_dirs = [root_dirs]
+    if tar_file is None:
+        datetime_str = str(datetime.now()).replace(" ", "_").replace(":", "_")
+        host_name = os.getenv('HF_HOSTNAME', 'emptyhost')
+        tar_file = "data_%s_%s.tar.gz" % (datetime_str, host_name)
+    assert root_dirs is not None
+    base_path = os.path.dirname(tar_file)
+    if not os.path.isdir(base_path) and os.path.dirname(tar_file):
+        base_path = makedirs(base_path, exist_ok=True, tmp_ok=True, use_base=True)
+        tar_file = os.path.join(base_path, os.path.basename(tar_file))
+    with tarfile.open(tar_file, "w:gz") as expt_tar:
+        for root_dir in root_dirs:
+            if root_dir is None:
+                continue
+            for root, d, files in os.walk(root_dir):
+                for file in files:
+                    file_to_archive = os.path.join(root, file)
+                    assert os.path.exists(file_to_archive)
+                    path_to_archive = os.path.relpath(file_to_archive, base_dir)
+                    expt_tar.add(name=file_to_archive, arcname=path_to_archive)
+    return tar_file, tar_file
+
+
 def save_generate_output(prompt=None, output=None, base_model=None, save_dir=None, where_from='unknown where from',
-                         extra_dict={}, error='', extra='', return_dict=False):
+                         extra_dict={}, error='', sources=[], which_api='', valid_key=None,
+                         h2ogpt_key='', return_dict=False):
     if not save_dir:
         return
     try:
         return _save_generate_output(prompt=prompt, output=output, base_model=base_model, save_dir=save_dir,
-                                     where_from=where_from, extra_dict=extra_dict, error=error, extra=extra,
+                                     where_from=where_from, extra_dict=extra_dict, error=error, sources=sources,
+                                     which_api=which_api, valid_key=valid_key, h2ogpt_key=h2ogpt_key,
                                      return_dict=return_dict)
     except Exception as e:
         traceback.print_exc()
@@ -247,7 +289,9 @@ def save_generate_output(prompt=None, output=None, base_model=None, save_dir=Non
 
 
 def _save_generate_output(prompt=None, output=None, base_model=None, save_dir=None, where_from='unknown where from',
-                          extra_dict={}, error='', extra='', return_dict=False):
+                          extra_dict={}, error='', sources=[], which_api='',
+                          valid_key=None, h2ogpt_key='',
+                          return_dict=False):
     """
     Save conversation to .json, row by row.
     json_file_path is path to final JSON file. If not in ., then will attempt to make directories.
@@ -266,7 +310,10 @@ def _save_generate_output(prompt=None, output=None, base_model=None, save_dir=No
                         base_model=base_model,
                         where_from=where_from,
                         error=error,
-                        extra=extra,
+                        sources=sources,
+                        which_api=which_api,
+                        valid_key=valid_key,
+                        h2ogpt_key=h2ogpt_key,
                         )
     dict_to_save.update(extra_dict)
 
@@ -277,7 +324,7 @@ def _save_generate_output(prompt=None, output=None, base_model=None, save_dir=No
         raise RuntimeError("save_dir already exists and is not a directory!")
     makedirs(save_dir, exist_ok=True)  # already should be made, can't change at this point
     import json
-    with filelock.FileLock("save_dir.lock"):
+    with filelock.FileLock("%s.lock" % os.path.basename(save_dir)):
         # lock logging in case have concurrency
         with open(os.path.join(save_dir, "history.json"), "a") as f:
             # just add [ at start, and ] at end, and have proper JSON dataset
@@ -530,7 +577,7 @@ def atomic_move_simple(src, dst):
     remove(src)
 
 
-def download_simple(url, dest=None):
+def download_simple(url, dest=None, overwrite=False, verbose=False):
     if dest is None:
         dest = os.path.basename(url)
     base_path = os.path.dirname(dest)
@@ -539,10 +586,14 @@ def download_simple(url, dest=None):
         dest = os.path.join(base_path, os.path.basename(dest))
 
     if os.path.isfile(dest):
-        print("Already have %s from url %s, delete file if invalid" % (dest, str(url)), flush=True)
-        return dest
+        if not overwrite:
+            print("Already have %s from url %s, delete file if invalid" % (dest, str(url)), flush=True)
+            return dest
+        else:
+            remove(dest)
 
-    print("BEGIN get url %s" % str(url), flush=True)
+    if verbose:
+        print("BEGIN get url %s" % str(url), flush=True)
     if url.startswith("file://"):
         from requests_file import FileAdapter
         s = requests.Session()
@@ -550,7 +601,8 @@ def download_simple(url, dest=None):
         url_data = s.get(url, stream=True)
     else:
         url_data = requests.get(url, stream=True)
-    print("GOT url %s" % str(url), flush=True)
+    if verbose:
+        print("GOT url %s" % str(url), flush=True)
 
     if url_data.status_code != requests.codes.ok:
         msg = "Cannot get url %s, code: %s, reason: %s" % (
@@ -566,7 +618,8 @@ def download_simple(url, dest=None):
     with open(dest_tmp, "wb") as f:
         shutil.copyfileobj(url_data.raw, f)
     atomic_move_simple(dest_tmp, dest)
-    print("DONE url %s" % str(url), flush=True)
+    if verbose:
+        print("DONE url %s" % str(url), flush=True)
     return dest
 
 
@@ -642,9 +695,12 @@ def get_url(x, from_str=False, short_name=False, font_size=2):
     if source.startswith('http://') or source.startswith('https://'):
         return """<font size="%s"><a href="%s" target="_blank"  rel="noopener noreferrer">%s</a></font>""" % (
             font_size, source, source_name)
-    else:
+    elif '<a href=' not in source:
         return """<font size="%s"><a href="file/%s" target="_blank"  rel="noopener noreferrer">%s</a></font>""" % (
             font_size, source, source_name)
+    else:
+        # already filled
+        return source
 
 
 def get_short_name(name, maxl=50):
@@ -687,7 +743,7 @@ def cuda_vis_check(total_gpus):
 
 
 def get_ngpus_vis(raise_if_exception=True):
-    ngpus_vis1 = 0
+    ngpus_vis1 = None
 
     shell = False
     if shell:
@@ -710,6 +766,13 @@ def get_ngpus_vis(raise_if_exception=True):
         print('Failed get_ngpus_vis: %s' % str(e))
         if raise_if_exception:
             raise
+
+    if ngpus_vis1 is None:
+        import torch
+        if get_device() == 'cuda':
+            ngpus_vis1 = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        else:
+            ngpus_vis1 = 0
 
     ngpus_vis1, which_gpus = cuda_vis_check(ngpus_vis1)
     return ngpus_vis1
@@ -889,6 +952,11 @@ class _ForkDataContext(threading.local):
 
 forkdatacontext = _ForkDataContext()
 
+# Add user info
+username = getpass.getuser()
+current_working_directory = os.getcwd()
+operating_system = platform.system()
+
 
 def _traced_func(func, *args, **kwargs):
     func, args, kwargs = forkdatacontext.get_args_kwargs_for_traced_func(func, args, kwargs)
@@ -896,7 +964,6 @@ def _traced_func(func, *args, **kwargs):
 
 
 def call_subprocess_onetask(func, args=None, kwargs=None):
-    import platform
     if platform.system() in ['Darwin', 'Windows']:
         return func(*args, **kwargs)
     if isinstance(args, list):
@@ -967,6 +1034,20 @@ try:
 except (PackageNotFoundError, AssertionError):
     pass
 
+have_chromamigdb = False
+try:
+    assert distribution('chromamigdb') is not None
+    have_chromamigdb = True
+except (PackageNotFoundError, AssertionError):
+    pass
+
+have_serpapi = False
+try:
+    assert distribution('google-search-results') is not None
+    have_serpapi = True
+except (PackageNotFoundError, AssertionError):
+    pass
+
 
 def hash_file(file):
     try:
@@ -978,13 +1059,16 @@ def hash_file(file):
         md5 = hashlib.md5()
         # sha1 = hashlib.sha1()
 
-        with open(file, 'rb') as f:
-            while True:
-                data = f.read(BUF_SIZE)
-                if not data:
-                    break
-                md5.update(data)
-                # sha1.update(data)
+        if not os.path.isfile(file):
+            md5.update(file.encode(encoding='UTF-8'))
+        else:
+            with open(file, 'rb') as f:
+                while True:
+                    data = f.read(BUF_SIZE)
+                    if not data:
+                        break
+                    md5.update(data)
+                    # sha1.update(data)
     except BaseException as e:
         print("Cannot hash %s due to %s" % (file, str(e)))
         traceback.print_exc()
@@ -1022,22 +1106,36 @@ class FakeTokenizer:
     2) For when model doesn't directly expose tokenizer but need to count tokens
     """
 
-    def __init__(self, model_max_length=2048, encoding_name="cl100k_base"):
-        # dont' push limit, since if using fake tokenizer, only estimate, and seen underestimates by order 250
-        self.model_max_length = model_max_length - 250
+    def __init__(self, model_max_length=2048, encoding_name="cl100k_base", is_openai=False,
+                 tokenizer=None,
+                 is_llama_cpp=False):
+        if model_max_length is None:
+            model_max_length = 2048
+        self.is_openai = is_openai
+        self.is_llama_cpp = is_llama_cpp
+        self.tokenizer = tokenizer
+        self.model_max_length = model_max_length
+        if not self.is_openai and not self.is_llama_cpp:
+            # don't push limit, since if using fake tokenizer, only estimate, and seen underestimates by order 250
+            self.model_max_length -= 250
         self.encoding_name = encoding_name
         # The first time this runs, it will require an internet connection to download. Later runs won't need an internet connection.
         import tiktoken
         self.encoding = tiktoken.get_encoding(self.encoding_name)
 
     def encode(self, x, *args, return_tensors="pt", **kwargs):
-        input_ids = self.encoding.encode(x, disallowed_special=())
+        if self.is_llama_cpp:  # and len(x) < 4 * 4 * self.model_max_length: # don't use llama.cpp if too much
+            input_ids = self.tokenizer.tokenize(b" " + x.encode("utf-8"))
+        else:
+            input_ids = self.encoding.encode(x, disallowed_special=())
         if return_tensors == 'pt' and isinstance(input_ids, list):
             import torch
             input_ids = torch.tensor(input_ids)
         return dict(input_ids=input_ids)
 
     def decode(self, x, *args, **kwargs):
+        if self.is_llama_cpp:  # and len(x) < 4 * self.model_max_length:   # don't use llama.cpp if too much
+            return self.tokenizer.detokenize(x)
         # input is input_ids[0] form
         return self.encoding.decode(x)
 
@@ -1077,6 +1175,7 @@ have_libreoffice = distutils.spawn.find_executable("libreoffice")
 try:
     from weasyprint import HTML
     import doctr
+
     have_doctr = True
 except:
     have_doctr = False
@@ -1118,35 +1217,140 @@ try:
 except (PackageNotFoundError, AssertionError):
     have_jq = False
 
+try:
+    assert distribution('optimum') is not None
+    have_optimum = True
+except (PackageNotFoundError, AssertionError):
+    have_optimum = False
+
+try:
+    assert distribution('librosa') is not None
+    have_librosa = True
+except (PackageNotFoundError, AssertionError):
+    have_librosa = False
+
+try:
+    assert distribution('wavio') is not None
+    have_wavio = True
+except (PackageNotFoundError, AssertionError):
+    have_wavio = False
+
+try:
+    assert distribution('soundfile') is not None
+    have_soundfile = True
+except (PackageNotFoundError, AssertionError):
+    have_soundfile = False
+
+try:
+    assert distribution('deepspeed') is not None
+    have_deepspeed = True
+except (PackageNotFoundError, AssertionError):
+    have_deepspeed = False
+
+try:
+    assert distribution('emoji') is not None
+    have_emoji = True
+except (PackageNotFoundError, AssertionError):
+    have_emoji = False
+
+try:
+    assert distribution('langid') is not None
+    have_langid = True
+except (PackageNotFoundError, AssertionError):
+    have_langid = False
+
+try:
+    assert distribution('TTS') is not None
+    have_TTS = True
+except (PackageNotFoundError, AssertionError):
+    have_TTS = False
+
+try:
+    assert distribution('faster_whisper') is not None
+    have_use_faster = True
+except (PackageNotFoundError, AssertionError):
+    have_use_faster = False
+
+try:
+    assert distribution('flash_attn') is not None
+    have_flash_attention = True
+    have_flash_attention_2 = distribution('flash_attn').version.startswith('2.')
+except (PackageNotFoundError, AssertionError):
+    have_flash_attention = False
+    have_flash_attention_2 = False
+
+try:
+    assert distribution('gradio') is not None
+    have_gradio = True
+    is_gradio_version4 = distribution('gradio').version.startswith('4.')
+except (PackageNotFoundError, AssertionError):
+    have_gradio = False
+    is_gradio_version4 = False
+
+try:
+    assert distribution('gradio_pdf') is not None
+    have_gradio_pdf = is_gradio_version4
+except (PackageNotFoundError, AssertionError):
+    have_gradio_pdf = False
+
+try:
+    assert distribution('pyrubberband') is not None
+    have_pyrubberband = True
+except (PackageNotFoundError, AssertionError):
+    have_pyrubberband = False
+
 only_unstructured_urls = os.environ.get("ONLY_UNSTRUCTURED_URLS", "0") == "1"
 only_selenium = os.environ.get("ONLY_SELENIUM", "0") == "1"
 only_playwright = os.environ.get("ONLY_PLAYWRIGHT", "0") == "1"
 
 
-def set_openai(inference_server):
+def set_openai(inference_server, model_name=None):
     if inference_server.startswith('vllm'):
-        import openai_vllm
-        openai_vllm.api_key = "EMPTY"
-        inf_type = inference_server.split(':')[0]
-        ip_vllm = inference_server.split(':')[1]
-        port_vllm = inference_server.split(':')[2]
-        openai_vllm.api_base = f"http://{ip_vllm}:{port_vllm}/v1"
-        return openai_vllm, inf_type, None, None, None
-    else:
-        import openai
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        openai.api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+        import openvllm
+        api_key = openvllm.api_key = "EMPTY"
+        inf_type = inference_server.split(':')[0].strip()
+        ip_port_vllm = ':'.join(inference_server.split(':')[1:])
+        if ip_port_vllm.startswith('https://') or ip_port_vllm.startswith('http://'):
+            api_base = openvllm.api_base = ip_port_vllm
+        else:
+            ip_vllm = inference_server.split(':')[1].strip()
+            port_vllm = inference_server.split(':')[2].strip()
+            api_base = openvllm.api_base = f"http://{ip_vllm}:{port_vllm}/v1"
 
+        from openvllm import vLLM
+        client = vLLM(base_url=api_base, api_key=api_key)
+        if inf_type in ['vllm_chat']:
+            client = client.chat.completions
+        else:
+            client = client.completions
+
+        return client, inf_type, None, api_base, None, api_key
+    else:
+        api_key = os.getenv("OPENAI_API_KEY")
         base_url = None
         deployment_type = None
         api_version = None
-        inf_type = inference_server.split(':')[0]
+        inf_type = inference_server.split(':')[0].strip()
         if len(inference_server.split(':')) >= 2:
-            deployment_type = inference_server.split(':')[1]
+            deployment_type = inference_server.split(':')[1].strip()
         if len(inference_server.split(':')) >= 3:
-            base_url = inference_server.split(':')[2]
+            base_url = inference_server.split(':')[2].strip()
+            base_url = 'https://' + base_url
         if len(inference_server.split(':')) >= 4:
-            api_version = inference_server.split(':')[3]
+            api_version = inference_server.split(':')[3].strip()
+        if inference_server.startswith('openai_azure'):
+            if api_version in ['None', None]:
+                # for function tools support
+                # https://github.com/Azure/azure-rest-api-specs/tree/main/specification/cognitiveservices/data-plane/AzureOpenAI/inference/preview/2023-12-01-preview
+                api_version = "2023-12-01-preview"
+            if os.getenv('OPENAI_AZURE_KEY') is not None:
+                # use this instead if exists
+                api_key = os.getenv("OPENAI_AZURE_KEY")
+
+        if len(inference_server.split(':')) >= 5:
+            api_key0 = inference_server.split(':')[4].strip()
+            if api_key0 not in ['None', None]:
+                api_key = api_key0
 
         if deployment_type == 'None':
             deployment_type = None
@@ -1154,7 +1358,28 @@ def set_openai(inference_server):
             base_url = None
         if base_url == 'None':
             base_url = None
-        return openai, inf_type, deployment_type, base_url, api_version
+
+        # cannot use non-chat model, uses old openai. stuff if go through to H2OOpenAI with chat model
+        if model_name:
+            chat_model = (model_name.startswith("gpt-3.5-turbo") or model_name.startswith(
+                "gpt-4")) and "-instruct" not in model_name
+            if chat_model and inf_type == 'openai_azure':
+                inf_type = 'openai_azure_chat'
+            if chat_model and inf_type == 'openai':
+                inf_type = 'openai_chat'
+
+        from openai import OpenAI, AzureOpenAI
+        if inf_type in ['openai_azure', 'openai_azure_chat']:
+            client = AzureOpenAI(azure_deployment=deployment_type, azure_endpoint=base_url, api_version=api_version,
+                                 api_key=api_key)
+        else:
+            client = OpenAI(base_url=base_url, api_key=api_key)
+        if inf_type in ['openai_chat', 'openai_azure_chat']:
+            client = client.chat.completions
+        else:
+            client = client.completions
+
+        return client, inf_type, deployment_type, base_url, api_version, api_key
 
 
 def get_list_or_str(x):
@@ -1190,24 +1415,45 @@ def url_alive(url):
     except Exception as e:
         return False
     else:
-        if response.status_code in [200, 301, 302]:
+        if response.status_code in [200, 301, 302, 307]:
             return True
         else:
             return False
 
 
-def dict_to_html(x, small=True):
+def return_good_url(url):
+    # ignore status code, just see if exists or not
+    for prefix in ['', 'http://', 'http://', 'https://www.', 'http://www.']:
+        try:
+            url_test = prefix + url
+            response = requests.head(url_test)
+        except Exception as e:
+            response = None
+            url_test = None
+        if response is not None:
+            # and response.status_code < 400:
+            # don't do status check, if got status, then is real URL regardless of goodness, not text
+            return url_test
+    return None
+
+
+def dict_to_html(x, small=True, api=False):
     df = pd.DataFrame(x.items(), columns=['Key', 'Value'])
     df.index = df.index + 1
     df.index.name = 'index'
-    res = tabulate.tabulate(df, headers='keys', tablefmt='unsafehtml')
-    if small:
-        return "<small>" + res + "</small>"
+    if api:
+        return tabulate.tabulate(df, headers='keys')
     else:
-        return res
+        res = tabulate.tabulate(df, headers='keys', tablefmt='unsafehtml')
+        if small:
+            return "<small>" + res + "</small>"
+        else:
+            return res
 
 
-def text_to_html(x):
+def text_to_html(x, api=False):
+    if api:
+        return x
     return """
 <style>
       pre {
@@ -1231,35 +1477,56 @@ def lg_to_gr(
     # translate:
     import torch
     n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-    n_gpus, gpu_ids = cuda_vis_check(n_gpus)
+    n_gpus, _ = cuda_vis_check(n_gpus)
+
+    image_audio_loaders_options = ['Caption']
     if n_gpus != 0:
-        image_loaders_options = ['Caption', 'CaptionBlip2']
-    else:
-        image_loaders_options = ['Caption']
+        image_audio_loaders_options.extend(['CaptionBlip2', 'Pix2Struct'])
     if have_tesseract:
-        image_loaders_options.append('OCR')
+        image_audio_loaders_options.append('OCR')
     if have_doctr:
-        image_loaders_options.append('DocTR')
-    image_loaders_options0 = []
+        image_audio_loaders_options.append('DocTR')
+    if have_librosa:
+        image_audio_loaders_options.append('ASR')
+        if n_gpus != 0:
+            image_audio_loaders_options.append('ASRLarge')
+
+    image_audio_loaders_options0 = []
     if have_tesseract and kwargs['enable_ocr']:
-        image_loaders_options0.append('OCR')
+        image_audio_loaders_options0.append('OCR')
     if have_doctr and kwargs['enable_doctr']:
-        image_loaders_options0.append('DocTR')
+        image_audio_loaders_options0.append('DocTR')
     if kwargs['enable_captions']:
         if kwargs['max_quality'] and n_gpus > 0:
             # BLIP2 only on GPU
-            image_loaders_options0.append('CaptionBlip2')
+            image_audio_loaders_options0.append('CaptionBlip2')
         else:
-            image_loaders_options0.append('Caption')
-    assert len(set(image_loaders_options0).difference(image_loaders_options)) == 0
+            image_audio_loaders_options0.append('Caption')
+    if have_librosa and kwargs['enable_transcriptions']:
+        if kwargs['max_quality'] and n_gpus > 0:
+            image_audio_loaders_options0.append('ASRLarge')
+        else:
+            image_audio_loaders_options0.append('ASR')
 
     pdf_loaders_options = ['PyMuPDF', 'Unstructured', 'PyPDF', 'TryHTML']
     if have_tesseract:
         pdf_loaders_options.append('OCR')
-    pdf_loaders_options0 = ['PyMuPDF']
-    assert len(set(pdf_loaders_options0).difference(pdf_loaders_options)) == 0
-    if kwargs['enable_pdf_ocr'] == 'on':
+    if have_doctr:
+        pdf_loaders_options.append('DocTR')
+
+    pdf_loaders_options0 = []
+    if kwargs['use_pymupdf'] in [True, 'auto', 'on']:
+        pdf_loaders_options0.append('PyMuPDF')
+    if kwargs['enable_pdf_ocr'] in [True, 'on']:
         pdf_loaders_options0.append('OCR')
+    if have_doctr and kwargs['enable_pdf_doctr'] in [True, 'on']:
+        pdf_loaders_options0.append('DocTR')
+    if kwargs['use_pypdf'] in [True, 'on']:
+        pdf_loaders_options0.append('PyPDF')
+    if kwargs['use_unstructured_pdf'] in [True, 'on']:
+       pdf_loaders_options0.append('Unstructured')
+    if kwargs['try_pdf_as_html'] in [True, 'on']:
+       pdf_loaders_options0.append('TryHTML')
 
     url_loaders_options = []
     if only_unstructured_urls:
@@ -1274,9 +1541,278 @@ def lg_to_gr(
             url_loaders_options.append('Selenium')
         if have_playwright:
             url_loaders_options.append('PlayWright')
+            url_loaders_options.append('ScrapeWithPlayWright')
+        url_loaders_options.append('ScrapeWithHttp')
     url_loaders_options0 = [url_loaders_options[0]]
-    assert len(set(url_loaders_options0).difference(url_loaders_options)) == 0
 
-    return image_loaders_options0, image_loaders_options, \
+    assert set(image_audio_loaders_options0).issubset(image_audio_loaders_options), "%s %s" % (
+        image_audio_loaders_options0, image_audio_loaders_options)
+    assert set(pdf_loaders_options0).issubset(pdf_loaders_options), "%s %s" % (
+        pdf_loaders_options0, pdf_loaders_options)
+    assert set(url_loaders_options0).issubset(url_loaders_options), "%s %s" % (
+        url_loaders_options0, url_loaders_options)
+
+    return image_audio_loaders_options0, image_audio_loaders_options, \
         pdf_loaders_options0, pdf_loaders_options, \
         url_loaders_options0, url_loaders_options
+
+
+def fix_json(s):
+    # Attempt to parse the string as-is.
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+
+    # Initialize variables.
+    new_s = ""
+    stack = []
+    is_inside_string = False
+    escaped = False
+
+    # Process each character in the string one at a time.
+    for char in s:
+        if is_inside_string:
+            if char == '"' and not escaped:
+                is_inside_string = False
+            elif char == '\n' and not escaped:
+                char = '\\n'  # Replace the newline character with the escape sequence.
+            elif char == '\\':
+                escaped = not escaped
+            else:
+                escaped = False
+        else:
+            if char == '"':
+                is_inside_string = True
+                escaped = False
+            elif char == '{':
+                stack.append('}')
+            elif char == '[':
+                stack.append(']')
+            elif char == '}' or char == ']':
+                if stack and stack[-1] == char:
+                    stack.pop()
+                else:
+                    # Mismatched closing character; the input is malformed.
+                    return None
+
+        # Append the processed character to the new string.
+        new_s += char
+
+    # If we're still inside a string at the end of processing, we need to close the string.
+    if is_inside_string:
+        new_s += '"'
+
+    # Close any remaining open structures in the reverse order that they were opened.
+    for closing_char in reversed(stack):
+        new_s += closing_char
+
+    # Attempt to parse the modified string as JSON.
+    try:
+        return json.loads(new_s)
+    except json.JSONDecodeError:
+        # If we still can't parse the string as JSON, return None to indicate failure.
+        return None
+
+
+def wrap_in_try_except(code):
+    # Add import traceback
+    code = "import traceback\n" + code
+
+    # Parse the input code into an AST
+    parsed_code = ast.parse(code)
+
+    # Wrap the entire code's AST in a single try-except block
+    try_except = ast.Try(
+        body=parsed_code.body,
+        handlers=[
+            ast.ExceptHandler(
+                type=ast.Name(id="Exception", ctx=ast.Load()),
+                name=None,
+                body=[
+                    ast.Expr(
+                        value=ast.Call(
+                            func=ast.Attribute(value=ast.Name(id="traceback", ctx=ast.Load()), attr="print_exc",
+                                               ctx=ast.Load()),
+                            args=[],
+                            keywords=[]
+                        )
+                    ),
+                ]
+            )
+        ],
+        orelse=[],
+        finalbody=[]
+    )
+
+    # Assign the try-except block as the new body
+    parsed_code.body = [try_except]
+
+    # Convert the modified AST back to source code
+    return ast.unparse(parsed_code)
+
+
+def enqueue_output(file, queue):
+    for line in iter(file.readline, ''):
+        queue.put(line)
+    file.close()
+
+
+def read_popen_pipes(p):
+    with ThreadPoolExecutor(2) as pool:
+        q_stdout, q_stderr = Queue(), Queue()
+
+        pool.submit(enqueue_output, p.stdout, q_stdout)
+        pool.submit(enqueue_output, p.stderr, q_stderr)
+
+        while True:
+
+            if p.poll() is not None and q_stdout.empty() and q_stderr.empty():
+                break
+
+            out_line = err_line = ''
+
+            try:
+                out_line = q_stdout.get_nowait()
+            except Empty:
+                pass
+            try:
+                err_line = q_stderr.get_nowait()
+            except Empty:
+                pass
+
+            yield out_line, err_line
+
+
+def start_process(cmd):
+    start_cmd = sys.executable + " -i -q -u"
+    print_cmd = 'print("{}")'
+    cmd = [start_cmd] + [cmd]
+
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    for c in iter(lambda: process.stdout.read(1), b''):
+        sys.stdout.write(c)
+
+
+def str_to_list(x, allow_none=False):
+    if isinstance(x, str):
+        if len(x.strip()) > 0:
+            if x.strip().startswith('['):
+                x = ast.literal_eval(x.strip())
+            else:
+                raise ValueError("Invalid str_to_list for %s" % x)
+        else:
+            x = []
+    elif x is None and not allow_none:
+        x = []
+    if allow_none:
+        assert isinstance(x, (type(None), list))
+    else:
+        assert isinstance(x, list)
+    return x
+
+
+def str_to_dict(x):
+    if isinstance(x, str):
+        if len(x.strip()) > 0:
+            if x.strip().startswith('{'):
+                x = ast.literal_eval(x.strip())
+            else:
+                raise ValueError("Invalid str_to_dict for %s" % x)
+        else:
+            x = {}
+    elif x is None:
+        x = {}
+    assert isinstance(x, dict)
+    return x
+
+
+def get_token_count(x, tokenizer, token_count_fun=None):
+    # NOTE: Somewhat duplicates H2OTextGenerationPipeline.get_token_count()
+    # handle ambiguity in if get dict or list
+    if tokenizer:
+        if hasattr(tokenizer, 'encode'):
+            tokens = tokenizer.encode(x)
+        else:
+            tokens = tokenizer(x)
+        if isinstance(tokens, dict) and 'input_ids' in tokens:
+            tokens = tokens['input_ids']
+        if isinstance(tokens, list):
+            n_tokens = len(tokens)
+        elif len(tokens.shape) == 2:
+            n_tokens = tokens.shape[1]
+        elif len(tokens.shape) == 1:
+            n_tokens = tokens.shape[0]
+        else:
+            raise RuntimeError("Cannot handle tokens: %s" % tokens)
+    elif token_count_fun is not None:
+        assert callable(token_count_fun)
+        n_tokens = token_count_fun(x)
+    else:
+        tokenizer = FakeTokenizer()
+        n_tokens = tokenizer.num_tokens_from_string(x)
+    return n_tokens
+
+
+def reverse_ucurve_list(lst):
+    if not lst:
+        return []
+    if len(lst) == 1:
+        return lst
+    if len(lst) == 2:
+        return [lst[1], lst[0]]
+
+    front_list = []
+    end_list = []
+
+    for i, item in enumerate(lst):
+        if i % 2 == 0:
+            end_list.append(item)
+        else:
+            front_list.append(item)
+
+    return front_list + end_list[::-1]
+
+
+def undo_reverse_ucurve_list(lst):
+    if not lst:
+        return []
+    if len(lst) == 1:
+        return lst
+    if len(lst) == 2:
+        return [lst[1], lst[0]]
+
+    # Split the list into two halves: the first half and the second half (reversed)
+    mid = len(lst) // 2
+    first_half = lst[:mid]
+    second_half = lst[mid:][::-1]
+
+    # Merge the two halves by taking elements alternatively from the second half and then the first half
+    result = []
+    for i in range(mid):
+        result.append(second_half[i])
+        result.append(first_half[i])
+
+    # If the length of the list is odd, append the last element of the second half
+    if len(lst) % 2 != 0:
+        result.append(second_half[-1])
+
+    return result
+
+
+def get_size(start_path='.'):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+
+    return total_size
+
+
+def get_test_name_core():
+    tn = os.environ['PYTEST_CURRENT_TEST'].split(':')[-1]
+    tn = "_".join(tn.split(' ')[:-1])  # skip (call) at end
+    return sanitize_filename(tn)

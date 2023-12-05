@@ -1,36 +1,40 @@
 # Linux
 
-These instructions are for Ubuntu x86_64 (other linux would be similar with different command instead of apt-get).
+This page describes how to manually install and run h2oGPT on Linux. Note that the following instructions are for Ubuntu x86_64. (The steps in the following subsection can be adapted to other Linux distributions by substituting `apt-get` with the appropriate package management command.)
 
-## Install:
+- [Install](#install)
+- [Run](#run)
 
-* First one needs a Python 3.10 environment.  We recommend using Miniconda.
+## Install
 
-  Download [MiniConda for Linux](https://repo.anaconda.com/miniconda/Miniconda3-py310_23.1.0-1-Linux-x86_64.sh).  After downloading, run:
+* Set up a Python 3.10 environment. We recommend using [Miniconda](https://docs.conda.io/projects/miniconda/en/latest/).
+
+  Download [Miniconda for Linux](https://repo.anaconda.com/miniconda/Miniconda3-py310_23.1.0-1-Linux-x86_64.sh).  After downloading, run:
   ```bash
   bash ./Miniconda3-py310_23.1.0-1-Linux-x86_64.sh
   # follow license agreement and add to bash if required
   ```
-  Enter new shell and should also see `(base)` in prompt.  Then, create new env:
+  Open a new shell and look for `(base)` in the prompt to confirm that Miniconda is properly installed, then create a new env:
   ```bash
   conda create -n h2ogpt -y
   conda activate h2ogpt
   conda install python=3.10 -c conda-forge -y
   ```
-  You should see `(h2ogpt)` in shell prompt.
+  You should see `(h2ogpt)` in the shell prompt.
   
-  Alternatively, on newer Ubuntu systems you can get Python 3.10 environment setup by doing:
+  Alternatively, on newer Ubuntu systems, you can set up a Python 3.10 environment by doing the following:
   ```bash
+  sudo apt-get update
   sudo apt-get install -y build-essential gcc python3.10-dev
   virtualenv -p python3 h2ogpt
   source h2ogpt/bin/activate
   ```
   
-* Test your python:
+* Check your python version with the following command:
   ```bash
   python --version
   ```
-  should say 3.10.xx and:
+  The return should say 3.10.xx, and:
   ```bash
   python -c "import os, sys ; print('hello world')"
   ```
@@ -41,120 +45,41 @@ These instructions are for Ubuntu x86_64 (other linux would be similar with diff
   ```
   On some systems, `pip` still refers back to the system one, then one can use `python -m pip` or `pip3` instead of `pip` or try `python3` instead of `python`.
 
-* For GPU: Install CUDA ToolKit with ability to compile using nvcc for some packages like llama-cpp-python, AutoGPTQ, exllama, and flash attention:
+* For GPU: Install CUDA ToolKit with ability to compile using nvcc for some packages like llama-cpp-python, AutoGPTQ, exllama, flash attention, TTS use of deepspeed, by going to [CUDA Toolkit](INSTALL.md#install-cuda-toolkit).  E.g. [CUDA 11.8 Toolkit](https://developer.nvidia.com/cuda-11-8-0-download-archive).  In order to avoid removing the original CUDA toolkit/driver you have, on NVIDIA's website, use the `runfile (local)` installer, and choose to not install driver or overwrite `/usr/local/cuda` link and just install the toolkit, and rely upon the `CUDA_HOME` env to point to the desired CUDA version.  Then do:
   ```bash
-  conda install cudatoolkit-dev -c conda-forge -y
+  export CUDA_HOME=/usr/local/cuda-11.8
+  ```
+  Or if you do not plan to use packages like deepspeed in coqui's TTS or build other packages (i.e. only use binaries), you can just use the non-dev version from conda if preferred:
+  ```bash
+  conda install cudatoolkit=11.8 -c conda-forge -y
   export CUDA_HOME=$CONDA_PREFIX 
   ```
-  which gives CUDA 11.7, or if you prefer follow [CUDA Toolkit](INSTALL.md#installing-cuda-toolkit), then do:
-  ```bash
-  export CUDA_HOME=/usr/local/cuda-11.7
-  ```
-  If you do not plan to use one of those packages, you can just use the non-dev version:
-  ```bash
-  conda install cudatoolkit=11.7 -c conda-forge -y
-  export CUDA_HOME=$CONDA_PREFIX 
-  ```
+  Do not install `cudatoolkit-dev` as it only goes up to cuda 11.7 that is no longer supported.
+
+* Place the `CUDA_HOME` export into your `~/.bashrc` or before starting h2oGPT for TTS's use of deepspeed to work.
   
-* Install dependencies:
-    ```bash
-    git clone https://github.com/h2oai/h2ogpt.git
-    cd h2ogpt
-    # fix any bad env
-    pip uninstall -y pandoc pypandoc pypandoc-binary
-    # broad support, but no training-time or data creation dependencies
-    
-    # CPU only:
-    pip install -r requirements.txt --extra-index https://download.pytorch.org/whl/cpu
-    
-    # GPU only:
-    pip install -r requirements.txt --extra-index https://download.pytorch.org/whl/cu117
-    ```
-* Install document question-answer dependencies:
-    ```bash
-    # May be required for jq package:
-    sudo apt-get install autoconf libtool
-    # Required for Doc Q/A: LangChain:
-    pip install -r reqs_optional/requirements_optional_langchain.txt
-    # Required for CPU: LLaMa/GPT4All:
-    pip install -r reqs_optional/requirements_optional_gpt4all.txt
-    # Optional: PyMuPDF/ArXiv:
-    pip install -r reqs_optional/requirements_optional_langchain.gpllike.txt
-    # Optional: Selenium/PlayWright:
-    pip install -r reqs_optional/requirements_optional_langchain.urls.txt
-    # Optional: support docx, pptx, ArXiv, etc. required by some python packages
-    sudo apt-get install -y libmagic-dev poppler-utils tesseract-ocr libtesseract-dev libreoffice
-    # Improved OCR with DocTR:
-    conda install -c conda-forge pygobject
-    pip install -r reqs_optional/requirements_optional_doctr.txt
-    # go back to older onnx so Tesseract OCR still works
-    pip install onnxruntime==1.15.0 onnxruntime-gpu==1.15.0
-    # Optional: for supporting unstructured package
-    python -m nltk.downloader all
-    # Optional but required for PlayWright
-    playwright install --with-deps
-* GPU Optional: For AutoGPTQ support on x86_64 linux
-    Try H2O.ai's pre-built wheel:
-    ```bash
-    pip uninstall -y auto-gptq ; pip install https://github.com/PanQiWei/AutoGPTQ/releases/download/v0.4.2/auto_gptq-0.4.2+cu118-cp310-cp310-linux_x86_64.whl
-    # in-transformers support of AutoGPTQ
-    pip install git+https://github.com/huggingface/optimum.git
-    ```
-    This avoids issues with missing cuda extensions etc.  if this does not apply to your system, run:
-    ```bash
-    pip uninstall -y auto-gptq ; GITHUB_ACTIONS=true pip install auto-gptq --extra-index-url https://huggingface.github.io/autogptq-index/whl/cu118/ --no-cache-dir
-    ```
-    If one sees `CUDA extension not installed` in output after loading model, one needs to compile AutoGPTQ, else will use double memory and be slower on GPU.
-    See [AutoGPTQ](README_GPU.md#autogptq) about running AutoGPT models.
-* GPU Optional: For exllama support on x86_64 linux
-    ```bash
-    pip uninstall -y exllama ; pip install https://github.com/jllllll/exllama/releases/download/0.0.13/exllama-0.0.13+cu118-cp310-cp310-linux_x86_64.whl --no-cache-dir
-    ```
-    See [exllama](README_GPU.md#exllama) about running exllama models.
-
-* GPU Optional: Support LLaMa.cpp with CUDA:
-  * Download/Install [CUDA llama-cpp-python wheel](https://github.com/jllllll/llama-cpp-python-cuBLAS-wheels), E.g.:
-    ```bash
-    pip uninstall -y llama-cpp-python llama-cpp-python-cuda
-    # GGMLv3 ONLY:
-    pip install https://github.com/jllllll/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.1.73+cu117-cp310-cp310-linux_x86_64.whl
-    # GGUF ONLY:
-    pip install https://github.com/jllllll/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.1.83+cu117-cp310-cp310-linux_x86_64.whl
-    ```
-  * If any issues, then must compile llama-cpp-python with CUDA support:
+* Prepare to install dependencies:
    ```bash
-    pip uninstall -y llama-cpp-python llama-cpp-python-cuda
-    export LLAMA_CUBLAS=1
-    export CMAKE_ARGS=-DLLAMA_CUBLAS=on
-    export FORCE_CMAKE=1
-    CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python==0.1.73 --no-cache-dir --verbose
+   export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cu118"
    ```
-  * By default, we set `n_gpu_layers` to large value, so llama.cpp offloads all layers for maximum GPU performance.  You can control this by passing `--llamacpp_dict="{n_gpu_layers=20}"` for value 20, or setting in UI.  For highest performance, offload *all* layers.
-    That is, one gets maximum performance if one sees in startup of h2oGPT all layers offloaded:
-      ```text
-    llama_model_load_internal: offloaded 35/35 layers to GPU
-    ```
-  but this requires sufficient GPU memory.  Reduce if you have low memory GPU, say 15.
-  * Pass to `generate.py` the option `--max_seq_len=2048` or some other number if you want model have controlled smaller context, else default (relatively large) value is used that will be slower on CPU.
-  * For LLaMa2, can set `max_tokens` to a larger value for longer output.
-  * If one sees `/usr/bin/nvcc` mentioned in errors, that file needs to be removed as would likely conflict with version installed for conda.  
-  * Note that once `llama-cpp-python` is compiled to support CUDA, it no longer works for CPU mode, so one would have to reinstall it without the above options to recovers CPU mode or have a separate h2oGPT env for CPU mode.
+  Choose cu118+ for A100/H100+.  Or for CPU set
+   ```bash
+   export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu"
+   ```
 
-### Compile Install Issues
-  * `/usr/local/cuda/include/crt/host_config.h:132:2: error: #error -- unsupported GNU version! gcc versions later than 11 are not supported!`
-    * gcc > 11 is not currently supported by nvcc.  Install GCC with a maximum version:
+* Run (`bash docs/linux_install.sh`)[linux_install.sh] for full normal document Q/A installation.  To allow all (GPL too) packages, run:
+    ```bash
+    GPLOK=1 bash docs/linux_install.sh
     ```
-    MAX_GCC_VERSION=11
-    sudo apt install gcc-$MAX_GCC_VERSION g++-$MAX_GCC_VERSION
-    sudo update-alternatives --config gcc
-    # pick version 11
-    sudo update-alternatives --config g++
-    # pick version 11
-    ```
+One can pick and choose different optional things to install instead by commenting them out in the shell script, or edit the script if any issues.  See script for notes about installation.
 
 ---
 
 ## Run
+
+See the [FAQ](FAQ.md#adding-models) for many ways to run models.  The following are some other examples.
+
+Note that models are stored in `/home/$USER/.cache/` for chroma, huggingface, selenium, torch, weaviate, etc. directories.
 
 * Check that can see CUDA from Torch:
    ```python
@@ -175,8 +100,7 @@ These instructions are for Ubuntu x86_64 (other linux would be similar with diff
   ```
   UI using LLaMa.cpp LLaMa2 model:
   ```bash
-  wget wget https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGML/resolve/main/llama-2-7b-chat.ggmlv3.q8_0.bin
-  python generate.py --base_model='llama' --prompt_type=llama2 --score_model=None --langchain_mode='UserData' --user_path=user_path
+  python generate.py --base_model='llama' --prompt_type=llama2 --score_model=None --langchain_mode='UserData' --user_path=user_path --model_path_llama=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf --max_seq_len=4096
   ```
   which works on CPU or GPU (assuming llama cpp python package compiled against CUDA or Metal).
 

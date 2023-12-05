@@ -47,6 +47,7 @@ Open-source data types are supported, .msg is not supported due to GPL-3 require
    - `.pptx` : PowerPoint Document,
    - `.ppt` : PowerPoint Document,
    - `.xml`: XML,
+
    - `.apng` : APNG Image (optional),
    - `.blp` : BLP Image (optional),
    - `.bmp` : BMP Image (optional),
@@ -114,53 +115,26 @@ Open-source data types are supported, .msg is not supported due to GPL-3 require
    - `.xbm` : XBM Image (optional),
    - `.xpm` : XPM Image (optional).
 
-To support image captioning, on Ubuntu run:
-```bash
-sudo apt-get install libmagic-dev poppler-utils tesseract-ocr libtesseract-dev
-```
-and ensure in `requirements_optional_langchain.txt` that `unstructured[local-inference]` and `pdf2image` are installed.  Otherwise, for no image support just `unstructured` is sufficient.
+   - `.mp4` : MP4 Audio (optional).
+   - `.mpeg` : MP4-based MPEG Audio (optional).
+   - `.mpg` : MP4-based MPG Audio (optional).
+   - `.mp3` : MP3 Audio (optional).
+   - `.ogg` : OGG Audio (optional).
+   - `.flac` : FLAC Audio (optional).
+   - `.aac` : AAC Audio (optional).
+   - `.au` : AU Audio (optional).
 
-OCR is disabled by default, but can be enabled if making database via `make_db.py`, and then on Ubuntu run:
-```bash
-sudo apt-get install tesseract-ocr libtesseract-dev
-```
-and ensure you `pip install pytesseract`.  See [Tesseract documentation](https://tesseract-ocr.github.io/tessdoc/Installation.html).
-
-To support Microsoft Office docx, doc, xls, xlsx, on Ubuntu run:
-```bash
-sudo apt-get install libreoffice
-```
-
-In some cases unstructured by itself cannot handle URL content properly, then we will use Selenium or PlayWright as backup methods if unstructured fails.  To have this be done, do:
-```bash
-pip install -r reqs_optional/requirements_optional_langchain.urls.txt
-```
-
-For Selenium, one needs to have chrome installed, e.g. on Ubuntu:
-```bash
-sudo bash
-apt install -y unzip xvfb libxi6 libgconf-2-4
-apt install -y default-jdk
-curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add
-bash -c "echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' >> /etc/apt/sources.list.d/google-chrome.list"
-apt -y update
-apt -y install google-chrome-stable  # e.g. Google Chrome 114.0.5735.198
-google-chrome --version  # e.g. Google Chrome 114.0.5735.198
-# visit https://chromedriver.chromium.org/downloads and download matching version
-# E.g.
-wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
-unzip chromedriver_linux64.zip
-sudo mv chromedriver /usr/bin/chromedriver
-sudo chown root:root /usr/bin/chromedriver
-sudo chmod +x /usr/bin/chromedriver
-```
-
-PlayWright is disabled by default as it hangs.
 
 ### Supported Meta Datatypes
 
-   - `.zip` : Zip File containing any native datatype,
+   - `.zip` : Zip File containing any native datatype.
    - `.urls` : Text file containing new-line separated URLs (to be consumed via download).
+
+If upload files and one of the files is a zip that contains images to be read by BLIP/DocTR or PDFs to be read by DocTR, this will currently fail with:
+```text
+Cannot re-initialize CUDA in forked subprocess. To use CUDA with multiprocessing, you must use the 'spawn' start method
+```
+Please upload the zip separately for now.
 
 ### Supported Datatypes in UI
 
@@ -169,13 +143,29 @@ PlayWright is disabled by default as it hangs.
    - `ArXiv` : Any ArXiv name (e.g. `arXiv:1706.03762`),
    - `Text` : Paste Text into UI.
 
-To support ArXiv API, do:
-```bash
-pip install -r reqs_optional/requirements_optional_langchain.gpllike.txt
-```
-but pymupdf is AGPL, requiring any source code be made available, which is not an issue directly for h2oGPT, but it's like GPL and too strong a constraint for general commercial use.
+### Supported Meta Tasks
 
-When pymupdf is installed, we will use `PyMuPDFLoader` by default to parse PDFs since it's better than `PyPDFLoader` and much better than `PDFMinerLoader`.
+   - `ScrapeWithPlayWRight` : Async Web Scraping using headless Chromium via PlayWright
+   - `ScrapeWithHttp` : Async Web Scraping using aiohttp (slower than PlayWright)
+
+* Timing
+  * Typical page like passing `https://github.com/h2oai/h2ogpt` takes about 300 seconds to process at default depth of 1 with about 140 pages.
+  * No good progress indicators from these packages, so just have to wait.
+* Depth:
+  * Set env `CRAWL_DEPTH=<depth>` to control depth for some integer `<depth>`, where 0 means only actual page, 1 means that page + all links on that page, etc.  `CRAWL_DEPTH=1` by default to avoid excessive crawling.
+  * Set env `ALL_CRAWL_DEPTH=<depth>` to force all url loaders to crawl at some depth (will be slower than async ones)
+* BS4:
+  * Set env `HTML_TRANS=BS4` to use `BS4` to transform instead of `Html2TextTransformer`.  Set `BS4_TAGS` env to some string of list to set [tags](https://python.langchain.com/docs/use_cases/web_scraping#quickstart).
+    * e.g. `export BS4_TAGS="['span']"`
+  * Scrape text content tags such as `<p>`, `<li>`, `<div>`, and `<a>` tags from the HTML content:
+    * `<p>`: The paragraph tag. It defines a paragraph in HTML and is used to group together related sentences and/or phrases.
+    * `<li>`: The list item tag. It is used within ordered (`<ol>`) and unordered (`<ul>`) lists to define individual items within the list.
+    * `<div>`: The division tag. It is a block-level element used to group other inline or block-level elements.
+    * `<a>`: The anchor tag. It is used to define hyperlinks.
+    * `<span>`: an inline container used to mark up a part of a text, or a part of a document.
+  For many news websites (e.g., WSJ, CNN), headlines and summaries are all in `<span>` tags.
+* ScrapeWithHttp:
+  * Can change code in src/gpt_langchain.py to change `requests_per_second=10` to some other value.
 
 ### Adding new file types
 
@@ -230,14 +220,15 @@ We only support one embedding at a time for each database.
 
 So you could use src/make_db.py to make the db for different embeddings (`--hf_embedding_model` like gen.py, any HF model) for each collection (e.g. UserData, UserData2) for each source folders (e.g. user_path, user_path2), and then at generate.py time you can specify those different collection names in `--langchain_modes` and `--langchain_modes` and `--langchain_mode_paths`.  For example:
 ```bash
-python src/make_db.py --user_path=user_path --collection_name=UserData --hf_embedding_model=hkunlp/instructor-large
-python src/make_db.py --user_path=user_path2 --collection_name=UserData2 --hf_embedding_model=sentence-transformers/all-MiniLM-L6-v2
+python src/make_db.py --user_path=user_path --collection_name=UserData --langchain_type=shared --hf_embedding_model=hkunlp/instructor-large
+python src/make_db.py --user_path=user_path2 --collection_name=UserData2 --langchain_type=shared --hf_embedding_model=sentence-transformers/all-MiniLM-L6-v2
 ```
-then
+Note that `shared` is default type already, but we show above to show what options are relevant if want to change them.
+Then run:
 ```bash
-python generate.py --base_model='llama' --prompt_type=llama2 --score_model=None --langchain_mode='UserData' --langchain_modes=['UserData','UserData2'] --langchain_modes=['UserData','UserData2'] --langchain_mode_paths={'UserData':'user_path','UserData2':'user_path2'}
+python generate.py --base_model='llama' --prompt_type=llama2 --score_model=None --langchain_mode='UserData' --langchain_modes=['UserData','UserData2'] --langchain_mode_paths={'UserData':'user_path','UserData2':'user_path2'} --langchain_mode_types={'UserData':'shared','UserData2':'shared'} --model_path_llama=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf --max_seq_len=4096
 ```
-and watch-out for use of whitespace.  For `langchain_mode_paths` you can pass surrounded by "'s and have spaces.
+or choose 13B.  And watch-out for use of whitespace.  For `langchain_mode_paths` you can pass surrounded by "'s and have spaces.
 
 ### Choosing document types
 
@@ -252,8 +243,9 @@ print(image_types)
 Select types, and pass to `make_db` like:
 ```bash
 python src/make_db.py --user_path="/home/jon/Downloads/demo_data" --collection_name=VAData --enable_pdf_ocr='off' --selected_file_types="['pdf', 'html', 'htm']"
-python generate.py  --base_model='llama' --prompt_type=llama2 --score_model=None --langchain_mode=VAData --langchain_modes=['VAData']
+python generate.py  --base_model='llama' --prompt_type=llama2 --score_model=None --langchain_mode=VAData --langchain_modes=['VAData'] --model_path_llama=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf --max_seq_len=4096
 ```
+or choose 13B.
 
 To ensure a collection is persisted even when not using any athentication, be sure it is shared type, e.g.:
 ```bash
@@ -261,8 +253,11 @@ python generate.py --base_model='llama' --prompt_type=llama2 --score_model=None 
        --visible_tos_tab=False --visible_hosts_tab=False --visible_models_tab=False \
        --langchain_modes="['LLM','PersistData']" --langchain_mode=PersistData \
        --langchain_mode_types="{'PersistData':'shared'}" \
-       --top_k_docs=-1 --max_time=360 --save_dir=save
+       --top_k_docs=-1 --max_time=360 --save_dir=save \
+       --model_path_llama=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf \
+       --max_seq_len=4096
 ```
+or choose 13B.
 
 ### Note about Embeddings
 

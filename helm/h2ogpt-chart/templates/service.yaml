@@ -4,6 +4,11 @@ kind: Service
 metadata:
   name: {{ include "h2ogpt.fullname" . }}-web
   namespace: {{ .Release.Namespace }}
+
+  {{- with .Values.h2ogpt.service.webServiceAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   selector:
     app: {{ include "h2ogpt.fullname" . }}
@@ -11,7 +16,7 @@ spec:
     - protocol: TCP
       port: {{ .Values.h2ogpt.service.webPort }}
       targetPort: 7860
-  type: NodePort
+  type: {{ .Values.h2ogpt.service.type }}
 {{- end }}
 ---
 {{- if .Values.h2ogpt.enabled }}
@@ -27,7 +32,7 @@ spec:
     - protocol: TCP
       port: {{ .Values.h2ogpt.service.gptPort }}
       targetPort: 8888
-  type: NodePort
+  type: {{ .Values.h2ogpt.service.type }}
 {{- end }}
 ---
 {{- if .Values.tgi.enabled }}
@@ -43,7 +48,7 @@ spec:
     - protocol: TCP
       port: {{ .Values.tgi.service.port }}
       targetPort: 80
-  type: NodePort
+  type: {{ .Values.tgi.service.type }}
 {{- end }}
 ---
 {{- if .Values.vllm.enabled }}
@@ -59,5 +64,5 @@ spec:
     - protocol: TCP
       port: {{ .Values.vllm.service.port }}
       targetPort: 5000
-  type: NodePort
+  type: {{ .Values.vllm.service.type }}
 {{- end }}

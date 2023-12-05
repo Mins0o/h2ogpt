@@ -35,7 +35,6 @@ h2o_gray = Color(
     c950="#0d0d0d",
 )
 
-
 text_xsm = Size(
     name="text_xsm",
     xxs="4px",
@@ -47,7 +46,6 @@ text_xsm = Size(
     xxl="12px",
 )
 
-
 spacing_xsm = Size(
     name="spacing_xsm",
     xxs="1px",
@@ -58,7 +56,6 @@ spacing_xsm = Size(
     xl="5px",
     xxl="7px",
 )
-
 
 radius_xsm = Size(
     name="radius_xsm",
@@ -83,20 +80,20 @@ class H2oTheme(Soft):
             radius_size: sizes.Size | str = sizes.radius_md,
             text_size: sizes.Size | str = sizes.text_lg,
             font: fonts.Font
-            | str
-            | Iterable[fonts.Font | str] = (
-                fonts.GoogleFont("Montserrat"),
-                "ui-sans-serif",
-                "system-ui",
-                "sans-serif",
+                  | str
+                  | Iterable[fonts.Font | str] = (
+                    fonts.GoogleFont("Montserrat"),
+                    "ui-sans-serif",
+                    "system-ui",
+                    "sans-serif",
             ),
             font_mono: fonts.Font
-            | str
-            | Iterable[fonts.Font | str] = (
-                fonts.GoogleFont("IBM Plex Mono"),
-                "ui-monospace",
-                "Consolas",
-                "monospace",
+                       | str
+                       | Iterable[fonts.Font | str] = (
+                    fonts.GoogleFont("IBM Plex Mono"),
+                    "ui-monospace",
+                    "Consolas",
+                    "monospace",
             ),
     ):
         super().__init__(
@@ -110,6 +107,37 @@ class H2oTheme(Soft):
             font_mono=font_mono,
         )
         super().set(
+            background_fill_primary_dark="*block_background_fill",
+            block_background_fill_dark="*neutral_950",
+            block_border_width='1px',
+            block_border_width_dark='1px',
+            block_label_background_fill="*primary_300",
+            block_label_background_fill_dark="*primary_600",
+            block_label_text_color="*neutral_950",
+            block_label_text_color_dark="*neutral_950",
+            block_radius="0 0 8px 8px",
+            block_title_text_color="*neutral_950",
+            block_title_text_color_dark="*neutral_950",
+            body_background_fill="*neutral_50",
+            body_background_fill_dark="*neutral_900",
+            border_color_primary="*neutral_100",
+            border_color_primary_dark="*neutral_700",
+            button_border_width="1px",
+            button_border_width_dark="1px",
+            button_primary_text_color="*neutral_950",
+            button_primary_text_color_dark="*neutral_950",
+            button_primary_background_fill="*primary_500",
+            button_primary_background_fill_dark="*primary_500",
+            button_secondary_background_fill_hover_dark="*primary_700",
+            button_secondary_border_color="*primary_500",
+            button_secondary_border_color_dark="*primary_500",
+            button_secondary_border_color_hover_dark="*primary_700",
+            checkbox_label_text_color_selected_dark='#000000',
+            # checkbox_label_text_size="*text_xs",  # too small for iPhone etc. but good if full large screen zoomed to fit
+            checkbox_label_text_size="*text_sm",
+            # radio_circle="""url("data:image/svg+xml,%3csvg viewBox='0 0 32 32' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='32' cy='32' r='1'/%3e%3c/svg%3e")""",
+            # checkbox_border_width=1,
+            # heckbox_border_width_dark=1,
             link_text_color="#3344DD",
             link_text_color_hover="#3344DD",
             link_text_color_visited="#3344DD",
@@ -117,27 +145,6 @@ class H2oTheme(Soft):
             link_text_color_hover_dark="#a3c8ff",
             link_text_color_active_dark="#a3c8ff",
             link_text_color_visited_dark="#74abff",
-            button_primary_text_color="*neutral_950",
-            button_primary_text_color_dark="*neutral_950",
-            button_primary_background_fill="*primary_500",
-            button_primary_background_fill_dark="*primary_500",
-            block_label_background_fill="*primary_500",
-            block_label_background_fill_dark="*primary_500",
-            block_label_text_color="*neutral_950",
-            block_label_text_color_dark="*neutral_950",
-            block_title_text_color="*neutral_950",
-            block_title_text_color_dark="*neutral_950",
-            block_background_fill_dark="*neutral_950",
-            body_background_fill="*neutral_50",
-            body_background_fill_dark="*neutral_900",
-            background_fill_primary_dark="*block_background_fill",
-            block_radius="0 0 8px 8px",
-            checkbox_label_text_color_selected_dark='#000000',
-            #checkbox_label_text_size="*text_xs",  # too small for iPhone etc. but good if full large screen zoomed to fit
-            checkbox_label_text_size="*text_sm",
-            #radio_circle="""url("data:image/svg+xml,%3csvg viewBox='0 0 32 32' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='32' cy='32' r='1'/%3e%3c/svg%3e")""",
-            #checkbox_border_width=1,
-            #heckbox_border_width_dark=1,
         )
 
 
@@ -152,20 +159,20 @@ class SoftTheme(Soft):
             radius_size: sizes.Size | str = sizes.radius_md,
             text_size: sizes.Size | str = sizes.text_md,
             font: fonts.Font
-            | str
-            | Iterable[fonts.Font | str] = (
-                fonts.GoogleFont("Montserrat"),
-                "ui-sans-serif",
-                "system-ui",
-                "sans-serif",
+                  | str
+                  | Iterable[fonts.Font | str] = (
+                    fonts.GoogleFont("Montserrat"),
+                    "ui-sans-serif",
+                    "system-ui",
+                    "sans-serif",
             ),
             font_mono: fonts.Font
-            | str
-            | Iterable[fonts.Font | str] = (
-                fonts.GoogleFont("IBM Plex Mono"),
-                "ui-monospace",
-                "Consolas",
-                "monospace",
+                       | str
+                       | Iterable[fonts.Font | str] = (
+                    fonts.GoogleFont("IBM Plex Mono"),
+                    "ui-monospace",
+                    "Consolas",
+                    "monospace",
             ),
     ):
         super().__init__(
@@ -183,38 +190,23 @@ class SoftTheme(Soft):
         )
 
 
-h2o_logo = '<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"' \
-           ' viewBox="0 0 600.28 600.28"><defs><style>.cls-1{fill:#fec925;}.cls-2{fill:#161616;}.cls-3{fill:' \
-           '#54585a;}</style></defs><g id="Fill-1"><rect class="cls-1" width="600.28" height="600.28" ' \
-           'rx="23.24"/></g><path class="cls-2" d="M174.33,246.06v92.78H152.86v-38H110.71v38H89.24V246.06h21.' \
-           '47v36.58h42.15V246.06Z"/><path class="cls-2" d="M259.81,321.34v17.5H189.7V324.92l35.78-33.8c8.22-7.' \
-           '82,9.68-12.59,9.68-17.09,0-7.29-5-11.53-14.85-11.53-7.95,0-14.71,3-19.21,9.27L185.46,261.7c7.15-10' \
-           '.47,20.14-17.23,36.84-17.23,20.68,0,34.46,10.6,34.46,27.44,0,9-2.52,17.22-15.51,29.29l-21.33,20.14Z"' \
-           '/><path class="cls-2" d="M268.69,292.45c0-27.57,21.47-48,50.76-48s50.76,20.28,50.76,48-21.6,48-50.' \
-           '76,48S268.69,320,268.69,292.45Zm79.78,0c0-17.63-12.46-29.69-29-29.69s-29,12.06-29,29.69,12.46,29.69' \
-           ',29,29.69S348.47,310.08,348.47,292.45Z"/><path class="cls-3" d="M377.23,326.91c0-7.69,5.7-12.73,12.' \
-           '85-12.73s12.86,5,12.86,12.73a12.86,12.86,0,1,1-25.71,0Z"/><path class="cls-3" d="M481.4,298.15v40.' \
-           '69H462.05V330c-3.84,6.49-11.27,9.94-21.74,9.94-16.7,0-26.64-9.28-26.64-21.61,0-12.59,8.88-21.34,30.' \
-           '62-21.34h16.43c0-8.87-5.3-14-16.43-14-7.55,0-15.37,2.51-20.54,6.62l-7.43-14.44c7.82-5.57,19.35-8.' \
-           '62,30.75-8.62C468.81,266.47,481.4,276.54,481.4,298.15Zm-20.68,18.16V309H446.54c-9.67,0-12.72,3.57-' \
-           '12.72,8.35,0,5.16,4.37,8.61,11.66,8.61C452.37,326,458.34,322.8,460.72,316.31Z"/><path class="cls-3"' \
-           ' d="M497.56,246.06c0-6.49,5.17-11.53,12.86-11.53s12.86,4.77,12.86,11.13c0,6.89-5.17,11.93-12.86,' \
-           '11.93S497.56,252.55,497.56,246.06Zm2.52,21.47h20.68v71.31H500.08Z"/></svg>'
-
-
-def get_h2o_title(title, description):
+def get_h2o_title(title, description, visible_h2ogpt_qrcode):
     # NOTE: Check full width desktop, smallest width browser desktop, iPhone browsers to ensure no overlap etc.
-    return f"""<div style="float:left; justify-content:left; height: 80px; width: 195px; margin-top:0px">
+    ret = f"""<div style="float:left; justify-content:left; height: 80px; width: 195px; margin-top:0px">
                     {description}
                 </div>
                 <div style="display:flex; justify-content:center; margin-bottom:30px; margin-right:330px;">
-                    <div style="height: 60px; width: 60px; margin-right:20px;">{h2o_logo}</div>
+                    <div style="height: 60px; width: 60px; margin-right:20px;"></div>
                     <h1 style="line-height:60px">{title}</h1>
                 </div>
+                """
+    if visible_h2ogpt_qrcode:
+        ret += """
                 <div style="float:right; height: 80px; width: 80px; margin-top:-100px">
                     <img src="https://raw.githubusercontent.com/h2oai/h2ogpt/main/docs/h2o-qr.png">
                 </div>
                 """
+    return ret
 
 
 def get_simple_title(title, description):
@@ -230,9 +222,12 @@ def get_dark_js() -> str:
         }
     """
 
+
 def get_heap_js(heapAppId: str) -> str:
-    return ("""globalThis.window.heap=window.heap||[],heap.load=function(e,t){window.heap.appid=e,window.heap.config=t=t||{};var r=document.createElement("script");r.type="text/javascript",r.async=!0,r.src="https://cdn.heapanalytics.com/js/heap-"+e+".js";var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(r,a);for(var n=function(e){return function(){heap.push([e].concat(Array.prototype.slice.call(arguments,0)))}},p=["addEventProperties","addUserProperties","clearEventProperties","identify","resetIdentity","removeEventProperty","setEventProperties","track","unsetEventProperty"],o=0;o<p.length;o++)heap[p[o]]=n(p[o])};"""
-           f"""heap.load("{heapAppId}");""")
+    return (
+        """globalThis.window.heap=window.heap||[],heap.load=function(e,t){window.heap.appid=e,window.heap.config=t=t||{};var r=document.createElement("script");r.type="text/javascript",r.async=!0,r.src="https://cdn.heapanalytics.com/js/heap-"+e+".js";var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(r,a);for(var n=function(e){return function(){heap.push([e].concat(Array.prototype.slice.call(arguments,0)))}},p=["addEventProperties","addUserProperties","clearEventProperties","identify","resetIdentity","removeEventProperty","setEventProperties","track","unsetEventProperty"],o=0;o<p.length;o++)heap[p[o]]=n(p[o])};"""
+        f"""heap.load("{heapAppId}");""")
+
 
 def wrap_js_to_lambda(num_params: int, *args: str) -> str:
     """

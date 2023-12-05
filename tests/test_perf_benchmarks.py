@@ -138,7 +138,7 @@ def test_perf_benchmarks(backend, base_model, task, bits, ngpus):
 
         # get file for client to upload
         url = 'https://cdn.openai.com/papers/whisper.pdf'
-        test_file1 = os.path.join('/tmp/', 'my_test_pdf.pdf')
+        test_file1 = os.path.join('/tmp/', 'whisper1.pdf')
         download_simple(url, dest=test_file1)
 
         # PURE client code
@@ -155,9 +155,11 @@ def test_perf_benchmarks(backend, base_model, task, bits, ngpus):
             langchain_mode = 'MyData'
             embed = True
             loaders = tuple([None, None, None, None])
+            h2ogpt_key = ''
             res = client.predict(test_file_server,
                                  chunk, chunk_size, langchain_mode, embed,
                                  *loaders,
+                                 h2ogpt_key,
                                  api_name='/add_file_api')
             assert res[0] is None
             assert res[1] == langchain_mode
