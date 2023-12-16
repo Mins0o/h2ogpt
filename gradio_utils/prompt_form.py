@@ -11,6 +11,8 @@ def get_chatbot_name(base_model, model_path_llama, inference_server='', debug=Fa
         inference_server = ' : ' + inference_server
     if base_model == 'llama':
         model_path_llama = os.path.basename(model_path_llama)
+        if model_path_llama.endswith('?download=true'):
+            model_path_llama = model_path_llama.replace('?download=true', '')
         return f'h2oGPT [Model: {model_path_llama}{inference_server}]'
     else:
         return f'h2oGPT [Model: {base_model}{inference_server}]'
@@ -22,7 +24,11 @@ def get_avatars(base_model, model_path_llama, inference_server=''):
     if inference_server is None:
         inference_server = ''
     human_avatar = "models/human.jpg"
-    if '01-ai/Yi-'.lower() in base_model.lower():
+    if 'mistralai'.lower() in base_model.lower() or \
+            'mistral'.lower() in base_model.lower() or \
+            'mixtral'.lower() in base_model.lower():
+        bot_avatar = "models/mistralai.png"
+    elif '01-ai/Yi-'.lower() in base_model.lower():
         bot_avatar = "models/yi.svg"
     elif 'wizard' in base_model.lower():
         bot_avatar = "models/wizard.jpg"
@@ -32,6 +38,12 @@ def get_avatars(base_model, model_path_llama, inference_server=''):
         bot_avatar = "models/vicuna.jpeg"
     elif 'longalpaca' in base_model.lower():
         bot_avatar = "models/longalpaca.png"
+    elif 'llama2-70b-chat' in base_model.lower():
+        bot_avatar = "models/meta.png"
+    elif 'llama2-13b-chat' in base_model.lower():
+        bot_avatar = "models/meta.png"
+    elif 'llama2-7b-chat' in base_model.lower():
+        bot_avatar = "models/meta.png"
     elif 'llama2' in base_model.lower():
         bot_avatar = "models/lama2.jpeg"
     elif 'llama-2' in base_model.lower():
@@ -44,6 +56,8 @@ def get_avatars(base_model, model_path_llama, inference_server=''):
         bot_avatar = "models/hf-logo.png"
     elif 'claude' in base_model.lower():
         bot_avatar = "models/anthropic.jpeg"
+    elif 'gemini' in base_model.lower():
+        bot_avatar = "models/google.png"
     else:
         bot_avatar = "models/h2oai.png"
     human_avatar = human_avatar if os.path.isfile(human_avatar) else None

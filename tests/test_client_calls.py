@@ -1260,8 +1260,8 @@ Summarize"""
         base_model = 'llama'
     else:
         base_model = 'h2oai/h2ogpt-4096-llama2-7b-chat'
-    model_path_llama = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf'
-    # model_path_llama = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q8_0.gguf'
+    model_path_llama = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true'
+    # model_path_llama = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q8_0.gguf?download=true'
     res_dict, client = run_client_chat_with_server(prompt=prompt,
                                                    max_seq_len=max_seq_len,
                                                    model_path_llama=model_path_llama,
@@ -1278,7 +1278,7 @@ def run_client_chat_with_server(prompt='Who are you?', stream_output=False, max_
                                 langchain_agents=[],
                                 user_path=None,
                                 langchain_modes=['UserData', 'MyData', 'Disabled', 'LLM'],
-                                model_path_llama='https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf',
+                                model_path_llama='https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true',
                                 docs_ordering_type='reverse_ucurve_sort',
                                 max_seq_len=None):
     if langchain_mode == 'Disabled':
@@ -1343,14 +1343,16 @@ def run_client_nochat_with_server(prompt='Who are you?', stream_output=False, ma
            'Once upon a time' in res_dict['response']
     return res_dict, client
 
+
 @pytest.mark.parametrize("gradio_ui_stream_chunk_size", [0, 20])
 @pytest.mark.parametrize("gradio_ui_stream_chunk_min_seconds", [0, .2, 2])
 @pytest.mark.parametrize("gradio_ui_stream_chunk_seconds", [.2, 2])
 @wrap_test_forked
-def test_client_nochat_stream(gradio_ui_stream_chunk_size, gradio_ui_stream_chunk_min_seconds, gradio_ui_stream_chunk_seconds):
-    other_server_kwargs=dict(gradio_ui_stream_chunk_size=gradio_ui_stream_chunk_size,
-                             gradio_ui_stream_chunk_min_seconds=gradio_ui_stream_chunk_min_seconds,
-                             gradio_ui_stream_chunk_seconds=gradio_ui_stream_chunk_seconds)
+def test_client_nochat_stream(gradio_ui_stream_chunk_size, gradio_ui_stream_chunk_min_seconds,
+                              gradio_ui_stream_chunk_seconds):
+    other_server_kwargs = dict(gradio_ui_stream_chunk_size=gradio_ui_stream_chunk_size,
+                               gradio_ui_stream_chunk_min_seconds=gradio_ui_stream_chunk_min_seconds,
+                               gradio_ui_stream_chunk_seconds=gradio_ui_stream_chunk_seconds)
     run_client_nochat_with_server(stream_output=True, prompt="Tell a very long kid's story about birds.",
                                   other_server_kwargs=other_server_kwargs)
 
@@ -2110,7 +2112,7 @@ def test_client_chat_stream_langchain_steps3(loaders, enforce_h2ogpt_api_key, en
     user_path = make_user_path_test()
 
     if loaders is None:
-        loaders = tuple([None, None, None, None])
+        loaders = tuple([None, None, None, None, None])
     else:
         image_audio_loaders_options0, image_audio_loaders_options, \
             pdf_loaders_options0, pdf_loaders_options, \
@@ -2124,10 +2126,12 @@ def test_client_chat_stream_langchain_steps3(loaders, enforce_h2ogpt_api_key, en
                      use_pypdf=True,
                      use_unstructured_pdf=True,
                      try_pdf_as_html=True,
+                     enable_llava=True,
+                     llava_model=None,
                      max_quality=True)
         # use all loaders except crawling ones
         url_loaders_options = [x for x in url_loaders_options if 'scrape' not in x.lower()]
-        loaders = [image_audio_loaders_options, pdf_loaders_options, url_loaders_options, None]
+        loaders = [image_audio_loaders_options, pdf_loaders_options, url_loaders_options, None, 0]
 
     stream_output = True
     max_new_tokens = 256
@@ -2213,7 +2217,8 @@ def test_client_chat_stream_langchain_steps3(loaders, enforce_h2ogpt_api_key, en
             "the provided PDF file is quite boring" in res_dict['response'] or
             "finds more text to be boring" in res_dict['response'] or
             "text to be boring" in res_dict['response'] or
-            "author finds more text to be boring" in res_dict['response']) \
+            "author finds more text to be boring" in res_dict['response'] or
+            "more text is boring" in res_dict['response']) \
            and 'sample1.pdf' in res_dict['response']
     # QUERY2
     prompt = "What is a universal file format?"
@@ -2342,7 +2347,7 @@ def test_client_chat_stream_langchain_steps3(loaders, enforce_h2ogpt_api_key, en
     res = client.predict(api_name='/export_chats')
     assert res is not None
 
-    url = 'https://research.google/pubs/pub334.pdf'
+    url = 'https://services.google.com/fh/files/misc/e_conomy_sea_2021_report.pdf'
     res = client.predict(url, langchain_mode, True, 512, True,
                          *loaders,
                          h2ogpt_key,
@@ -2546,7 +2551,7 @@ def test_client_load_unload_models(model_choice):
     lora_choice = ''
     server_choice = '' if model_choice not in openai_gpts else 'openai_chat'
     # model_state
-    prompt_type = '' if model_choice != 'llama' else 'llama2' # built-in, but prompt_type needs to be selected
+    prompt_type = '' if model_choice != 'llama' else 'llama2'  # built-in, but prompt_type needs to be selected
     model_load8bit_checkbox = False
     model_load4bit_checkbox = 'AWQ' not in model_choice and 'GGUF' not in model_choice and 'GPTQ' not in model_choice
     model_low_bit_mode = 1
@@ -2560,7 +2565,7 @@ def test_client_load_unload_models(model_choice):
     max_seq_len = -1
     rope_scaling = '{}'
     # GGML:
-    model_path_llama = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf' if model_choice == 'llama' else ''
+    model_path_llama = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true' if model_choice == 'llama' else ''
     model_name_gptj = ''
     model_name_gpt4all_llama = ''
     n_gpu_layers = 100
@@ -2594,7 +2599,7 @@ def test_client_load_unload_models(model_choice):
     model_choice_ex = model_choice
     model_load_gptq_ex = 'model' if 'GPTQ' in model_choice else ''
     model_load_awq_ex = 'model' if 'AWQ' in model_choice else ''
-    model_path_llama_ex = 'https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q5_K_M.gguf' if model_choice == 'llama' else ''
+    model_path_llama_ex = 'https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q5_K_M.gguf?download=true' if model_choice == 'llama' else ''
 
     if model_choice == 'h2oai/h2ogpt-oig-oasst1-512-6_9b':
         prompt_type_ex = 'human_bot'
@@ -2602,17 +2607,17 @@ def test_client_load_unload_models(model_choice):
     elif model_choice in ['llama']:
         prompt_type_ex = 'llama2'
         model_choice_ex = 'llama'
-        model_path_llama_ex = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf'
+        model_path_llama_ex = 'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true'
         max_seq_len_ex = 4096.0
     elif model_choice in ['TheBloke/Llama-2-7B-Chat-GGUF']:
         prompt_type_ex = 'llama2'
         model_choice_ex = 'llama'
-        model_path_llama_ex = 'https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q5_K_M.gguf'
+        model_path_llama_ex = 'https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q5_K_M.gguf?download=true'
         max_seq_len_ex = 4096.0
     elif model_choice in ['TheBloke/zephyr-7B-beta-GGUF']:
         prompt_type_ex = 'zephyr'
         model_choice_ex = 'llama'
-        model_path_llama_ex = 'https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q5_K_M.gguf'
+        model_path_llama_ex = 'https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q5_K_M.gguf?download=true'
         max_seq_len_ex = 4096.0
     elif model_choice in ['HuggingFaceH4/zephyr-7b-beta',
                           'TheBloke/zephyr-7B-beta-AWQ']:
@@ -2659,13 +2664,14 @@ def test_client_load_unload_models(model_choice):
                          model_names_curated +
                          ['zephyr-7b-beta.Q5_K_M.gguf'] +
                          [
-                             'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf'])
+                             'https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true'])
 @wrap_test_forked
 def test_client_curated_base_models(base_model, stream_output):
     if base_model in model_names_curated_big:
         return
     if base_model == 'zephyr-7b-beta.Q5_K_M.gguf' and not os.path.isfile('zephyr-7b-beta.Q5_K_M.gguf'):
-        download_simple('https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q5_K_M.gguf')
+        download_simple(
+            'https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF/resolve/main/zephyr-7b-beta.Q5_K_M.gguf?download=true')
 
     stream_output = True
     from src.gen import main
@@ -3937,6 +3943,8 @@ def test_client1_tts(tts_model):
 
     play_audio(res, sr=sr)
 
+    check_final_res(res)
+
 
 def play_audio(res, sr=16000):
     # convert audio to file
@@ -3967,13 +3975,18 @@ def play_audio(res, sr=16000):
     'microsoft/speecht5_tts',
     'tts_models/multilingual/multi-dataset/xtts_v2'
 ])
+@pytest.mark.parametrize("base_model", [
+    'llama',
+    'HuggingFaceH4/zephyr-7b-beta'
+])
 @wrap_test_forked
-def test_client1_tts_stream(tts_model):
+def test_client1_tts_stream(tts_model, base_model):
     sr = set_env(tts_model)
 
     from src.gen import main
-    main(base_model='llama', chat=False,
+    main(base_model=base_model, chat=False,
          tts_model=tts_model,
+         save_dir='foodir',
          stream_output=True, gradio=True, num_beams=1, block_gradio_exit=False)
 
     from gradio_client import Client
@@ -3984,25 +3997,57 @@ def test_client1_tts_stream(tts_model):
     kwargs = dict(instruction_nochat=prompt, chatbot_role="Female AI Assistant", speaker="SLT (female)",
                   stream_output=True)
 
+    verbose = False
     job = client.submit(str(dict(kwargs)), api_name='/submit_nochat_api')
     job_outputs_num = 0
     while not job.done():
         outputs_list = job.communicator.job.outputs
-        job_outputs_num_new = len(outputs_list[job_outputs_num + 1:])
+        job_outputs_num_new = len(outputs_list[job_outputs_num:])
         for num in range(job_outputs_num_new):
             res = outputs_list[job_outputs_num + num]
             res = ast.literal_eval(res)
-            print('Stream %d: %s\n' % (num, res['response']), flush=True)
+            if verbose:
+                print('Stream %d: %s\n\n %s\n\n' % (num, res['response'], res), flush=True)
+            else:
+                print('Stream %d' % (job_outputs_num + num), flush=True)
             play_audio(res, sr=sr)
         job_outputs_num += job_outputs_num_new
         time.sleep(0.01)
 
     outputs_list = job.outputs()
-    job_outputs_num_new = len(outputs_list[job_outputs_num + 1:])
+    job_outputs_num_new = len(outputs_list[job_outputs_num:])
+    res = {}
     for num in range(job_outputs_num_new):
         res = outputs_list[job_outputs_num + num]
         res = ast.literal_eval(res)
-        print('Final Stream %d: %s\n' % (num, res['response']), flush=True)
+        if verbose:
+            print('Final Stream %d: %s\n\n%s\n\n' % (num, res['response'], res), flush=True)
+        else:
+            print('Final Stream %d' % (job_outputs_num + num), flush=True)
         play_audio(res, sr=sr)
     job_outputs_num += job_outputs_num_new
     print("total job_outputs_num=%d" % job_outputs_num, flush=True)
+    check_final_res(res, base_model=base_model)
+
+
+def check_final_res(res, base_model='llama'):
+    assert res['save_dict']
+    assert res['save_dict']['prompt']
+    if base_model == 'llama':
+        assert res['save_dict']['base_model'] == 'llama'
+    else:
+        assert res['save_dict']['base_model'] == 'HuggingFaceH4/zephyr-7b-beta'
+    assert res['save_dict']['where_from']
+    assert res['save_dict']['valid_key'] == 'not enforced'
+    assert res['save_dict']['h2ogpt_key'] is None
+
+    assert res['save_dict']['extra_dict']
+    if base_model == 'llama':
+        assert res['save_dict']['extra_dict']['llamacpp_dict']
+        assert res['save_dict']['extra_dict']['prompt_type'] == 'llama2'
+    else:
+        assert res['save_dict']['extra_dict']['prompt_type'] == 'zephyr'
+    assert res['save_dict']['extra_dict']['do_sample'] == False
+    assert res['save_dict']['extra_dict']['num_prompt_tokens'] > 10
+    assert res['save_dict']['extra_dict']['ntokens'] > 60
+    assert res['save_dict']['extra_dict']['tokens_persecond'] > 5

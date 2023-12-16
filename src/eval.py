@@ -12,7 +12,7 @@ from utils import clear_torch_cache, NullContext, get_kwargs, makedirs
 
 
 def run_eval(  # for local function:
-        base_model=None, lora_weights=None, inference_server=None,
+        base_model=None, lora_weights=None, inference_server=None, regenerate_clients=None,
         prompt_type=None, prompt_dict=None, system_prompt=None,
         debug=None, chat=False,
         stream_output=None, async_output=None, num_async=None,
@@ -27,6 +27,12 @@ def run_eval(  # for local function:
         llamacpp_dict=None, llamacpp_path=None,
         exllama_dict=None, gptq_dict=None, attention_sinks=None, sink_dict=None, hf_model_dict=None,
         truncation_generation=None,
+        use_pymupdf=None,
+        use_unstructured_pdf=None,
+        use_pypdf=None,
+        enable_pdf_ocr=None,
+        enable_pdf_doctr=None,
+        try_pdf_as_html=None,
         # for evaluate args beyond what's already above, or things that are always dynamic and locally created
         temperature=None,
         top_p=None,
@@ -58,6 +64,7 @@ def run_eval(  # for local function:
         pdf_loaders=None,
         url_loaders=None,
         jq_schema=None,
+        extract_frames=None,
         visible_models=None,
         h2ogpt_key=None,
         add_search_to_context=None,
@@ -71,6 +78,7 @@ def run_eval(  # for local function:
         docs_joiner=None,
         hyde_level=None,
         hyde_template=None,
+        hyde_show_only_final=None,
         doc_json_mode=None,
         chatbot_role=None,
         speaker=None,
@@ -81,6 +89,11 @@ def run_eval(  # for local function:
         caption_loader=None,
         doctr_loader=None,
         pix2struct_loader=None,
+        llava_model=None,
+        image_gen_loader=None,
+        image_gen_loader_high=None,
+        image_change_loader=None,
+
         asr_model=None,
         asr_loader=None,
 
@@ -89,6 +102,7 @@ def run_eval(  # for local function:
         url_loaders_options0=None,
         jq_schema0=None,
         keep_sources_in_context=None,
+        allow_chat_system_prompt=None,
         src_lang=None, tgt_lang=None, concurrency_count=None, save_dir=None, sanitize_bot_response=None,
         model_state0=None,
         max_max_new_tokens=None,
@@ -235,12 +249,12 @@ def run_eval(  # for local function:
         score_median = 0
 
         for exi, ex in enumerate(examples):
-            clear_torch_cache()
+            clear_torch_cache(allow_skip=True)
 
             instruction = ex[eval_func_param_names.index('instruction_nochat')]
             iinput = ex[eval_func_param_names.index('iinput_nochat')]
             context = ex[eval_func_param_names.index('context')]
-            clear_torch_cache()
+            clear_torch_cache(allow_skip=True)
             print("")
             print("START" + "=" * 100)
             print("Question: %s %s" % (instruction, ('input=%s' % iinput if iinput else '')))

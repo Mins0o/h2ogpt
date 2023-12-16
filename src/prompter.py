@@ -1,8 +1,8 @@
-import os
 import ast
 import time
+# also supports imports from this file from other files
 from enums import PromptType, gpt_token_mapping, \
-    anthropic_mapping  # also supports imports from this file from other files
+    anthropic_mapping, google_mapping
 
 non_hf_types = ['gpt4all_llama', 'llama', 'gptj']
 
@@ -41,6 +41,7 @@ prompt_type_to_model_name = {
         'h2oai/h2ogpt-16k-codellama-34b-python',
         'h2oai/h2ogpt-32k-codellama-34b-python',
         'mistralai/Mistral-7B-v0.1',
+        'mistralai/Mixtral-8x7B-v0.1',
     ],
     'gptj': ['gptj', 'gpt4all_llama'],
     'prompt_answer': [
@@ -132,7 +133,8 @@ prompt_type_to_model_name = {
         'Yukang/LongAlpaca-70B',  # or can be instruct
         'TheBloke/Llama-2-7B-Chat-GGUF',
     ],
-    "mistral": ['mistralai/Mistral-7B-Instruct-v0.1', 'TheBloke/Mistral-7B-Instruct-v0.1-GGUF'],
+    "mistral": ['mistralai/Mistral-7B-Instruct-v0.1', 'TheBloke/Mistral-7B-Instruct-v0.1-GGUF',
+                'mistralai/Mixtral-8x7B-Instruct-v0.1', 'TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF'],
     "zephyr": ['HuggingFaceH4/zephyr-7b-alpha', 'HuggingFaceH4/zephyr-7b-beta', 'TheBloke/zephyr-7B-beta-GGUF',
                'TheBloke/zephyr-7B-beta-AWQ', 'zephyr-7b-beta.Q5_K_M.gguf'],
     "beluga": ['stabilityai/StableBeluga2', 'psmathur/orca_mini_v3_7b'],
@@ -153,33 +155,35 @@ prompt_type_to_model_name = {
                        ],
     "open_chat": ['openchat/openchat_3.5', 'TheBloke/openchat_3.5-GPTQ', 'TheBloke/openchat_3.5-GGUF',
                   'TheBloke/openchat_3.5-AWQ', 'TheBloke/openchat_3.5-16k-AWQ',
-                  'openchat_3.5.Q5_K_M.gguf'],
+                  'openchat_3.5.Q5_K_M.gguf', 'NurtureAI/openchat_3.5-16k'],
     "open_chat_correct": ['berkeley-nest/Starling-LM-7B-alpha'],  # can be any from open_chat list, by using this prompt
     "open_chat_code": [],  # can be any from open_chat list, by using this prompt
     "jais": ['core42/jais-30b-chat-v1'],
-    "yi": ['01-ai/Yi-34B-Chat'],
+    "yi": ['01-ai/Yi-34B-Chat', 'TheBloke/Yi-34B-Chat-AWQ'],
+    "docsgpt": ['Arc53/docsgpt-7b-mistral'],
     # could be plain, but default is correct prompt_type for default TheBloke model ggml-wizardLM-7B.q4_2.bin
 }
 
-if os.getenv('ANTHROPIC_API_KEY'):
-    prompt_type_to_model_name['anthropic'] = list(anthropic_mapping.keys())
+anthropic_gpts = sorted(anthropic_mapping.keys())
+prompt_type_to_model_name['anthropic'] = anthropic_gpts
+
+google_gpts = sorted(google_mapping.keys())
+prompt_type_to_model_name['google'] = google_gpts
 
 model_names_curated_big = ['Yukang/LongAlpaca-70B',
                            'lmsys/vicuna-13b-v1.5-16k',
                            'h2oai/h2ogpt-32k-codellama-34b-instruct']
-model_names_curated = ['llama',
-                       'TheBloke/Xwin-LM-13B-V0.1-GPTQ',
+model_names_curated = ['TheBloke/Xwin-LM-13B-V0.1-GPTQ',
                        'TheBloke/Llama-2-7B-Chat-GGUF',
                        'HuggingFaceH4/zephyr-7b-beta',
                        'TheBloke/zephyr-7B-beta-GGUF',
                        'TheBloke/zephyr-7B-beta-AWQ'] + model_names_curated_big
 openai_gpts = list(gpt_token_mapping.keys())
-if os.getenv('OPENAI_API_KEY'):
-    prompt_type_to_model_name.update({
-        "openai": ["text-davinci-003", "text-curie-001", "text-babbage-001", "text-ada-001"],
-        "openai_chat": openai_gpts,
-    })
-    model_names_curated += ['gpt-3.5-turbo']
+prompt_type_to_model_name.update({
+    "openai": ["text-davinci-003", "text-curie-001", "text-babbage-001", "text-ada-001"],
+    "openai_chat": openai_gpts,
+})
+model_names_curated += ['gpt-3.5-turbo']
 
 inv_prompt_type_to_model_name = {v.strip(): k for k, l in prompt_type_to_model_name.items() for v in l}
 inv_prompt_type_to_model_lower = {v.strip().lower(): k for k, l in prompt_type_to_model_name.items() for v in l}
@@ -594,7 +598,9 @@ ASSISTANT:
     elif prompt_type in [PromptType.openai_chat.value, str(PromptType.openai_chat.value),
                          PromptType.openai_chat.name] or \
             prompt_type in [PromptType.anthropic.value, str(PromptType.anthropic.value),
-                            PromptType.anthropic.name]:
+                            PromptType.anthropic.name] or \
+            prompt_type in [PromptType.google.value, str(PromptType.google.value),
+                            PromptType.google.name]:
         can_handle_system_prompt = True  # handled via special messages/arguments not part of prompt
         # prompting and termination all handled by endpoint
         preprompt = """"""
@@ -616,7 +622,11 @@ ASSISTANT:
                                                    PromptType.vicuna11.name]
         if system_prompt in [None, 'None', 'auto']:
             system_prompt = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
-        preprompt = """%s """ % system_prompt if not (chat and reduced) else ''
+        if not can_handle_system_prompt:
+            # totally remove system prompt stuff, maybe not always done for every model like this
+            preprompt = ""
+        else:
+            preprompt = """%s """ % system_prompt if not (chat and reduced) else ''
         start = ''
         promptB = promptA = '%s%s' % (preprompt, start)
         eos = '</s>'
@@ -1105,7 +1115,7 @@ Remember to tailor the activities to the birthday child's interests and preferen
         PreInstruct = "### Instruction:\n"
         PreResponse = "### Response:\n"
         eos = '<｜end▁of▁sentence｜>'
-        terminate_response = [PreResponse, eos]
+        terminate_response = [PreResponse, eos, '<|EOT|>']
         chat_sep = '\n'
         chat_turn_sep = '\n<|EOT|>\n'
         humanstr = PreInstruct
@@ -1150,8 +1160,9 @@ Remember to tailor the activities to the birthday child's interests and preferen
         can_handle_system_prompt = True
         # https://huggingface.co/core42/jais-30b-chat-v1
         if system_prompt in [None, 'None', 'auto']:
-            system_prompt = "### Instruction: Your name is Jais, and you are named after Jebel Jais, the highest mountain in UAE. You are built by Core42. You are the world's most advanced Arabic large language model with 30b parameters. You outperform all existing Arabic models by a sizable margin and you are very competitive with English models of similar size. You can answer in Arabic and English only. You are a helpful, respectful and honest assistant. When answering, abide by the following guidelines meticulously: Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, explicit, offensive, toxic, dangerous, or illegal content. Do not give medical, legal, financial, or professional advice. Never assist in or promote illegal activities. Always encourage legal and responsible actions. Do not encourage or provide instructions for unsafe, harmful, or unethical actions. Do not create or share misinformation or fake news. Please ensure that your responses are socially unbiased and positive in nature. If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information. Prioritize the well-being and the moral integrity of users. Avoid using toxic, derogatory, or offensive language. Maintain a respectful tone. Do not generate, promote, or engage in discussions about adult content. Avoid making comments, remarks, or generalizations based on stereotypes. Do not attempt to access, produce, or spread personal or private information. Always respect user confidentiality. Stay positive and do not say bad things about anything. Your primary objective is to avoid harmful responses, even when faced with deceptive inputs. Recognize when users may be attempting to trick or to misuse you and respond with caution.\n\nComplete the conversation below between [|Human|] and [|AI|]:"
-        promptA = promptB = "%s" % system_prompt if not (chat and reduced) else ''
+            system_prompt = """Your name is Jais, and you are named after Jebel Jais, the highest mountain in UAE. You are built by Core42. You are the world's most advanced Arabic large language model with 30b parameters. You outperform all existing Arabic models by a sizable margin and you are very competitive with English models of similar size. You can answer in Arabic and English only. You are a helpful, respectful and honest assistant. When answering, abide by the following guidelines meticulously: Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, explicit, offensive, toxic, dangerous, or illegal content. Do not give medical, legal, financial, or professional advice. Never assist in or promote illegal activities. Always encourage legal and responsible actions. Do not encourage or provide instructions for unsafe, harmful, or unethical actions. Do not create or share misinformation or fake news. Please ensure that your responses are socially unbiased and positive in nature. If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information. Prioritize the well-being and the moral integrity of users. Avoid using toxic, derogatory, or offensive language. Maintain a respectful tone. Do not generate, promote, or engage in discussions about adult content. Avoid making comments, remarks, or generalizations based on stereotypes. Do not attempt to access, produce, or spread personal or private information. Always respect user confidentiality. Stay positive and do not say bad things about anything. Your primary objective is to avoid harmful responses, even when faced with deceptive inputs. Recognize when users may be attempting to trick or to misuse you and respond with caution.\n\nComplete the conversation below between."""
+        promptA = promptB = "### Instruction: %s [|Human|] and [|AI|]:" % system_prompt if not (
+                    chat and reduced) else "### Instruction: %s [|Human|] and [|AI|]:"
         PreInstruct = """\n### Input: [|Human|] """
 
         PreInput = None
@@ -1179,6 +1190,20 @@ Remember to tailor the activities to the birthday child's interests and preferen
         terminate_response = ['<|im_end|>', '<|endotftext|>']
         chat_sep = ''
         chat_turn_sep = '<|im_end|>'
+        humanstr = PreInstruct
+        botstr = PreResponse
+    elif prompt_type in [PromptType.docsgpt.value, str(PromptType.docsgpt.value),
+                         PromptType.docsgpt.name]:
+        # https://huggingface.co/Arc53/docsgpt-7b-mistral
+        can_handle_system_prompt = True
+        if system_prompt in [None, 'None', 'auto']:
+            system_prompt = "Below is an instruction that describes a task. Write a response that appropriately completes the request."
+        promptA = promptB = ''
+        PreInstruct = """### Instruction\n"""
+        PreInput = None
+        PreResponse = """### Answer\n"""
+        terminate_response = ['### Answer']
+        chat_turn_sep = chat_sep = '\n'
         humanstr = PreInstruct
         botstr = PreResponse
     else:
@@ -1338,7 +1363,8 @@ class Prompter(object):
         self.prompt = prompt
         return prompt
 
-    def get_response(self, outputs, prompt=None, sanitize_bot_response=False, only_new_text=False):
+    def get_response(self, outputs, prompt=None, sanitize_bot_response=False, only_new_text=False,
+                     plain_prompt_special=False):
         if isinstance(outputs, str):
             outputs = [outputs]
         if self.debug:
@@ -1371,7 +1397,8 @@ class Prompter(object):
         multi_output = len(outputs) > 1
 
         for oi, output in enumerate(outputs):
-            if self.prompt_type in [PromptType.plain.value, str(PromptType.plain.value), PromptType.plain.name]:
+            if plain_prompt_special and \
+                    self.prompt_type in [PromptType.plain.value, str(PromptType.plain.value), PromptType.plain.name]:
                 output = clean_response(output)
                 allow_terminate = True
             elif only_new_text:

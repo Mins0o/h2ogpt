@@ -246,6 +246,7 @@ def test_qa_daidocs_db_chunk_hf_dbs(db_type, top_k_docs):
                      llamacpp_dict={},
                      )
     check_ret(ret)
+    kill_weaviate(db_type)
 
 
 def get_test_model():
@@ -267,6 +268,7 @@ def get_test_model():
                       base_model=base_model,
                       tokenizer_base_model=base_model,
                       inference_server='',
+                      regenerate_clients=False,
                       lora_weights='',
                       gpu_id=0,
                       n_jobs=1,
@@ -289,6 +291,7 @@ def get_test_model():
                       truncation_generation=False,
                       hf_model_dict={},
                       use_flash_attention_2=False,
+                      llamacpp_path='llamacpp_path',
 
                       verbose=False)
     model, tokenizer, device = get_model_retry(reward_type=False,
@@ -359,7 +362,7 @@ def test_qa_wiki_db_chunk_hf_dbs_llama(db_type):
                                                            n_jobs=8,
                                                            max_seq_len=512,
                                                            llamacpp_dict=dict(
-                                                               model_path_llama='https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf',
+                                                               model_path_llama='https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true',
                                                                n_gpu_layers=100,
                                                                use_mlock=True,
                                                                n_batch=1024))
@@ -382,6 +385,7 @@ def test_qa_wiki_db_chunk_hf_dbs_llama(db_type):
                      llamacpp_dict=dict(n_gpu_layers=100, use_mlock=True, n_batch=1024),
                      )
     check_ret(ret)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.skipif(not have_openai_key, reason="requires OpenAI key to run")
@@ -518,8 +522,10 @@ def test_make_add_db(repeat, db_type):
                                   enable_captions=False,
                                   enable_doctr=False,
                                   enable_pix2struct=False,
+                                  enable_llava=False,
                                   enable_transcriptions=False,
                                   captions_model="Salesforce/blip-image-captioning-base",
+                                  llava_model=None,
                                   asr_model='openai/whisper-medium',
                                   enable_ocr=False,
                                   enable_pdf_ocr='auto',
@@ -626,6 +632,7 @@ def test_make_add_db(repeat, db_type):
                     assert len(docs) == 3 + (1 if db_type == 'chroma' else 0)
                     assert docs[0].page_content == msg2
                     assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file2)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -649,6 +656,7 @@ def test_zip_add(db_type):
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert docs[0].page_content == msg1
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -673,6 +681,7 @@ def test_tar_add(db_type, tar_type):
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert docs[0].page_content == msg1
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -688,6 +697,7 @@ def test_url_add(db_type):
         docs = db.similarity_search("list founding team of h2o.ai")
         assert len(docs) == 4
         assert 'Sri Ambati' in docs[0].page_content
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -711,6 +721,7 @@ def test_urls_add(db_type):
         docs = db.similarity_search("list founding team of h2o.ai")
         assert len(docs) == 4
         assert 'Sri Ambati' in docs[0].page_content
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -738,6 +749,7 @@ def test_urls_file_add(db_type):
             docs = db.similarity_search("list founding team of h2o.ai")
             assert len(docs) == 4
             assert 'Sri Ambati' in docs[0].page_content
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -770,6 +782,7 @@ def test_html_add(db_type):
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert 'Yugu' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -789,6 +802,7 @@ def test_docx_add(db_type):
             assert len(docs) == 4
             assert 'calibre' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -809,6 +823,7 @@ def test_xls_add(db_type):
                    'Small Business' in docs[0].page_content or \
                    'United States of America' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -833,6 +848,7 @@ def test_md_add(db_type):
             assert 'Query and summarize your documents' in docs[1].page_content or 'document Q/A' in docs[
                 1].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -853,6 +869,7 @@ def test_rst_add(db_type):
             assert len(docs) == 4
             assert 'Within paragraphs, inline markup' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -873,6 +890,7 @@ def test_xml_add(db_type):
             assert len(docs) == 4 if db_type == 'chroma' else 3
             assert 'Ensuite Bathroom' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -893,6 +911,7 @@ def test_eml_add(db_type):
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert 'testtest' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -925,6 +944,7 @@ FYIcenter.com Team"""
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert 'Welcome' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -944,6 +964,7 @@ def test_odt_add(db_type):
             assert len(docs) == 4
             assert 'ownCloud' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -964,6 +985,7 @@ def test_pptx_add(db_type):
             assert len(docs) == 4
             assert 'Presentation' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("use_pypdf", ['auto', 'on', 'off'])
@@ -1040,6 +1062,7 @@ def test_pdf_add(db_type, enable_pdf_ocr, enable_pdf_doctr, use_pymupdf, use_uns
                     docs[0].metadata['source']) == os.path.basename(test_file1)
             else:
                 assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("use_pypdf", ['auto', 'on', 'off'])
@@ -1118,6 +1141,7 @@ def test_image_pdf_add(db_type, enable_pdf_ocr, enable_pdf_doctr, use_pymupdf, u
                     docs[0].metadata['source']) == os.path.basename(test_file1)
             else:
                 assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -1138,6 +1162,7 @@ def test_simple_pptx_add(db_type):
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert 'Powerpoint' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -1158,6 +1183,7 @@ def test_epub_add(db_type):
             assert len(docs) == 4
             assert 'happy' in docs[0].page_content or 'happiness' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.skip(reason="Not supported, GPL3, and msg-extractor code fails too often")
@@ -1180,6 +1206,7 @@ def test_msg_add(db_type):
             assert len(docs) == 4 + (1 if db_type == 'chroma' else 0)
             assert 'Happy' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 os.system('cd tests ; unzip -o driverslicense.jpeg.zip')
@@ -1234,11 +1261,12 @@ def test_png_add(captions_model, caption_gpu, pre_load_image_audio_models, enabl
                            db_type=db_type,
                            file=file)
     except Exception as e:
-        if not enable_captions and 'data/pexels-evg-kowalievska-1170986_small.jpg' in file and 'had no valid text and no meta data was parsed' in str(e):
+        if not enable_captions and 'data/pexels-evg-kowalievska-1170986_small.jpg' in file and 'had no valid text and no meta data was parsed' in str(
+                e):
             pass
         else:
             raise
-
+    kill_weaviate(db_type)
 
 
 def run_png_add(captions_model=None, caption_gpu=False,
@@ -1378,9 +1406,9 @@ def run_png_add(captions_model=None, caption_gpu=False,
                 raise NotImplementedError()
 
 
-def check_content_captions(docs, caption_model, enable_pix2struct):
+def check_content_captions(docs, captions_model, enable_pix2struct):
     assert any(['license' in docs[ix].page_content.lower() for ix in range(len(docs))])
-    if caption_model is not None and 'blip2' in caption_model:
+    if captions_model is not None and 'blip2' in captions_model:
         str_expected = """california driver license with a woman's face on it california driver license"""
     elif enable_pix2struct:
         str_expected = """california license"""
@@ -1410,6 +1438,46 @@ def check_source(docs, test_file1):
         assert os.path.basename(os.path.normpath(test_file1)) in os.path.normpath(docs[0].metadata['source'])
     else:
         assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+
+
+@pytest.mark.parametrize("image_file", ['./models/anthropic.png', 'data/pexels-evg-kowalievska-1170986_small.jpg'])
+@pytest.mark.parametrize("db_type", db_types)
+@wrap_test_forked
+def test_llava_add(image_file, db_type):
+    kill_weaviate(db_type)
+    from src.make_db import make_db_main
+    with tempfile.TemporaryDirectory() as tmp_persist_directory:
+        with tempfile.TemporaryDirectory() as tmp_user_path:
+            file = os.path.basename(image_file)
+            test_file1 = os.path.join(tmp_user_path, file)
+            shutil.copy(image_file, test_file1)
+
+            db, collection_name = make_db_main(persist_directory=tmp_persist_directory, user_path=tmp_user_path,
+                                               fail_any_exception=True, db_type=db_type,
+                                               add_if_exists=False,
+                                               enable_llava=True,
+                                               llava_model=os.getenv('H2OGPT_LLAVA_MODEL', 'http://192.168.1.46:7861'),
+                                               enable_doctr=False,
+                                               enable_captions=False,
+                                               enable_ocr=False,
+                                               enable_transcriptions=False,
+                                               enable_pdf_ocr=False,
+                                               enable_pdf_doctr=False,
+                                               enable_pix2struct=False,
+                                               )
+            assert db is not None
+            if 'anthropic' in image_file:
+                docs = db.similarity_search("circle")
+                assert len(docs) == 2 if db_type == 'chroma' else 1
+                assert 'letter "A"' in docs[0].page_content
+            else:
+                docs = db.similarity_search("cat")
+                assert len(docs) == 2 if db_type == 'chroma' else 1
+                assert 'cat' in docs[0].page_content
+                assert 'birds' in docs[0].page_content or 'outdoors' in docs[0].page_content or 'outside' in docs[
+                    0].page_content
+            assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -1446,6 +1514,7 @@ Microsoft  Word developed RTF for document transportability and gives a user acc
             assert len(docs) == 4
             assert 'Microsoft' in docs[1].page_content
             assert os.path.normpath(docs[1].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 # Windows is not supported with EmbeddedDB. Please upvote the feature request if you want this: https://github.com/weaviate/weaviate-python-client/issues/239
@@ -1462,6 +1531,7 @@ def test_url_more_add(db_type):
         docs = db.similarity_search("Ukraine")
         assert len(docs) == 4
         assert 'Ukraine' in docs[0].page_content
+    kill_weaviate(db_type)
 
 
 json_data = {
@@ -1528,6 +1598,7 @@ def test_json_add(db_type):
             assert len(docs) == 2 if db_type == 'chroma' else 1
             assert 'Bulls' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1)
+    kill_weaviate(db_type)
 
 
 @pytest.mark.parametrize("db_type", db_types)
@@ -1552,6 +1623,7 @@ def test_jsonl_gz_add(db_type):
             assert len(docs) == 2 if db_type == 'chroma' else 1
             assert 'Bulls' in docs[0].page_content
             assert os.path.normpath(docs[0].metadata['source']) == os.path.normpath(test_file1).replace('.gz', '')
+    kill_weaviate(db_type)
 
 
 @wrap_test_forked
@@ -1601,12 +1673,34 @@ def test_youtube_audio_add(db_type):
             url = 'https://www.youtube.com/watch?v=cwjs1WAG9CM'
             db, collection_name = make_db_main(persist_directory=tmp_persist_directory, url=url,
                                                fail_any_exception=True, db_type=db_type,
-                                               add_if_exists=False)
+                                               add_if_exists=False,
+                                               extract_frames=0)
             assert db is not None
             docs = db.similarity_search("Example")
             assert len(docs) == 3 + (1 if db_type == 'chroma' else 0) or len(docs) == 4
             assert 'structured output' in docs[0].page_content
             assert url in docs[0].metadata['source']
+    kill_weaviate(db_type)
+
+
+@pytest.mark.parametrize("db_type", db_types)
+@wrap_test_forked
+def test_youtube_full_add(db_type):
+    kill_weaviate(db_type)
+    from src.make_db import make_db_main
+    with tempfile.TemporaryDirectory() as tmp_persist_directory:
+        with tempfile.TemporaryDirectory() as tmp_user_path:
+            url = 'https://www.youtube.com/shorts/JjdqlglRxrU'
+            db, collection_name = make_db_main(persist_directory=tmp_persist_directory, url=url,
+                                               fail_any_exception=True, db_type=db_type,
+                                               add_if_exists=False)
+            assert db is not None
+            docs = db.similarity_search("cat")
+            assert len(docs) == 3 + (1 if db_type == 'chroma' else 0) or len(docs) == 4
+            assert 'couch' in str([x.page_content for x in docs])
+            assert url in docs[0].metadata['source'] or url in docs[0].metadata['original_source']
+            docs = db.similarity_search("cat", 100)
+            assert 'So I heard if you give a cat an egg' in str([x.page_content for x in docs])
     kill_weaviate(db_type)
 
 
@@ -1626,6 +1720,32 @@ def test_mp3_add(db_type):
             assert len(docs) == 1 + (1 if db_type == 'chroma' else 0)
             assert 'Porsche Macan' in docs[0].page_content
             assert 'porsche.mp3' in os.path.normpath(docs[0].metadata['source'])
+    kill_weaviate(db_type)
+
+
+@pytest.mark.parametrize("db_type", db_types)
+@wrap_test_forked
+def test_mp4_add(db_type):
+    kill_weaviate(db_type)
+    from src.make_db import make_db_main
+    with tempfile.TemporaryDirectory() as tmp_persist_directory:
+        with tempfile.TemporaryDirectory() as tmp_user_path:
+            url = 'https://h2o-release.s3.amazonaws.com/h2ogpt/iG_jeMeUPBnUO6sx.mp4'
+            test_file1 = os.path.join(tmp_user_path, 'demo.mp4')
+            download_simple(url, dest=test_file1)
+            db, collection_name = make_db_main(persist_directory=tmp_persist_directory, user_path=tmp_user_path,
+                                               fail_any_exception=True, db_type=db_type)
+            assert db is not None
+            docs = db.similarity_search("Gemini")
+            assert len(docs) == 3 + (1 if db_type == 'chroma' else 0)
+            assert 'Gemini' in str([x.page_content for x in docs])
+            assert 'demo.mp4' in os.path.normpath(docs[0].metadata['source'])
+            docs = db.similarity_search("AI", 100)
+            assert 'fun birthday party' in str([x.page_content for x in docs])
+            assert 'Gemini tries to design' in str([x.page_content for x in docs])
+            assert 'H2OAudioCaptionLoader' in str([x.metadata for x in docs])
+            assert 'H2OImageCaptionLoader' in str([x.metadata for x in docs])
+            assert '.jpg' in str([x.metadata for x in docs])
     kill_weaviate(db_type)
 
 

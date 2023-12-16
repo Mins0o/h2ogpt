@@ -56,6 +56,9 @@ fi
     # Audio speed-up and slowdown (best quality), if not installed can only speed-up with lower quality
       sudo apt-get install -y rubberband-cli
       pip install pyrubberband==0.3.0
+      # https://stackoverflow.com/questions/75813603/python-working-with-sound-librosa-and-pyrubberband-conflict
+      pip uninstall -y pysoundfile soundfile
+      pip install soundfile==0.12.1
     # Optional: Only for testing for now
     pip install playsound==1.3.0
     # STT from microphone (may not be required if ffmpeg installed above)
@@ -77,6 +80,12 @@ fi
 #* STT and TTS Notes:
 #  * STT: Ensure microphone is on and in browser go to http://localhost:7860 instead of http://0.0.0.0:7860 for microphone to be possible to allow in browser.
 #  * TTS: For XTT models, ensure `CUDA_HOME` is set correctly, because deepspeed compiles at runtime using torch and nvcc.  Those must match CUDA version.  E.g. if used `--extra-index https://download.pytorch.org/whl/cu118`, then must have ENV `CUDA_HOME=/usr/local/cuda-11.7` or ENV from conda must be that version.  Since conda only has up to cuda 11.7 for dev toolkit, but H100+ need cuda 11.8, for those cases one should download the toolkit from NVIDIA.
+
+    # Vision/Image packages
+    pip install fiftyone
+    pip install pytube
+    pip install diffusers==0.24.0
+
 #* HNSW issue:
 #    In some cases old chroma migration package will install old hnswlib and that may cause issues when making a database, then do:
 #   ```bash
@@ -115,7 +124,7 @@ fi
 #    See [AutoGPTQ](README_GPU.md#autogptq) about running AutoGPT models.
 #* GPU Optional: For AutoAWQ support on x86_64 linux
 #    ```bash
-    pip uninstall -y autoawq ; pip install autoawq==0.1.7
+    pip uninstall -y autoawq ; pip install https://github.com/casper-hansen/AutoAWQ/releases/download/v0.1.7/autoawq-0.1.7+cu118-cp310-cp310-linux_x86_64.whl
     # fix version since don't need lm-eval to have its version of 1.5.0
     pip install sacrebleu==2.3.1 --upgrade
 #    ```
@@ -135,20 +144,7 @@ fi
 #    ```
 #    See [exllama](README_GPU.md#exllama) about running exllama models.
 
-#* GPU Optional: Support LLaMa.cpp with CUDA:
-#  * Download/Install from [CUDA llama-cpp-python wheel](https://github.com/jllllll/llama-cpp-python-cuBLAS-wheels) or [https://github.com/abetlen/llama-cpp-python/releases](https://github.com/abetlen/llama-cpp-python/releases), E.g.:
-#    * GGUF ONLY for CUDA GPU (keeping CPU package in place to support CPU + GPU at same time):
-#      ```bash
-      pip uninstall -y llama-cpp-python-cuda
-      pip install https://github.com/jllllll/llama-cpp-python-cuBLAS-wheels/releases/download/textgen-webui/llama_cpp_python_cuda-0.2.19+cu118-cp310-cp310-manylinux_2_31_x86_64.whl
-#      ```
-#    * GGUF ONLY for CPU-AVX (can be used with -cuda one above)
-#      ```bash
-      pip uninstall -y llama-cpp-python
-      pip install https://github.com/jllllll/llama-cpp-python-cuBLAS-wheels/releases/download/cpu/llama_cpp_python-0.2.19+cpuavx2-cp310-cp310-manylinux_2_31_x86_64.whl
-#      ```
-#      For CPU, ensure to run with `CUDA_VISIBLE_DEVICES=` in case torch with CUDA installed.
-#  * If any issues, then must compile llama-cpp-python with CUDA support:
+#  * If any issues with llama_cpp_python, then must compile llama-cpp-python with CUDA support:
 #   ```bash
 if [ 1 -eq 0 ]
 then
@@ -156,7 +152,7 @@ then
     export LLAMA_CUBLAS=1
     export CMAKE_ARGS=-DLLAMA_CUBLAS=on
     export FORCE_CMAKE=1
-    CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python==0.2.19 --no-cache-dir --verbose
+    CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python==0.2.23 --no-cache-dir --verbose
 fi
 #   ```
 #  * By default, we set `n_gpu_layers` to large value, so llama.cpp offloads all layers for maximum GPU performance.  You can control this by passing `--llamacpp_dict="{'n_gpu_layers':20}"` for value 20, or setting in UI.  For highest performance, offload *all* layers.
@@ -176,7 +172,10 @@ fi
 #  ```
 #* GPU Optional: Support amazon/MistralLite with flash attention 2
 #   ```bash
+if [[ -v CUDA_HOME ]];
+then
     pip install flash-attn==2.3.4 --no-build-isolation
+fi
 #  ```
 #* Control Core Count for chroma < 0.4 using chromamigdb package:
 #    * Duckdb used by Chroma < 0.4 uses DuckDB 0.8.1 that has no control over number of threads per database, `import duckdb` leads to all virtual cores as threads and each db consumes another number of threads equal to virtual cores.  To prevent this, one can rebuild duckdb using [this modification](https://github.com/h2oai/duckdb/commit/dcd8c1ffc53dd020623630efb99ba6a3a4cbc5ad) or one can try to use the prebuild wheel for x86_64 built on Ubuntu 20.
@@ -199,10 +198,6 @@ fi
   #sed -i 's/async for line in response.aiter_text():/async for line in response.aiter_lines():\n                if len(line) == 0:\n                    continue\n                if line == """{"detail":"Not Found"}""":\n                    continue/g' gradio_client/utils.py
   cd $pwd0
 #    ```
-#* vLLM support
-#   ```bash
-   pip install https://h2o-release.s3.amazonaws.com/h2ogpt/openvllm-1.3.7-py3-none-any.whl
-#   ```
 
 #* PDF View support
 #   ```bash

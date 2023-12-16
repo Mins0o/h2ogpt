@@ -1,5 +1,110 @@
 ## Frequently asked questions
 
+### Mixtral GGUF
+
+Here is how to get Mixtral GGUF going with h2oGPT with no update to llama cpp python package except in a PR.
+
+```bash
+pip uninstall llama_cpp_python
+pip uninstall llama_cpp_python_cuda
+git clone --recurse-submodules https://github.com/abetlen/llama-cpp-python.git
+cd llama-cpp-python/
+git fetch origin pull/1007/head:1007
+git switch 1007
+git submodule update --remote
+git submodule update
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install -e .
+cd ~/h2ogpt/
+python generate.py --base-model=TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF --prompt_type=mistral --max_seq_len=4096
+```
+Downloads 31GB GGUF file.  Good to pass `--max_seq_len` to avoid relaunch of model to find automatically the size, since uses more memory.  Also, if use automatic setting, h2oGPT says auto-context set at 4096 instead of up to `--max_seq_len=32768`.
+
+Use appropriate `CMAKE_ARGS` [instructions](https://github.com/abetlen/llama-cpp-python#installation) for building on MAC/CPU/etc.
+
+Set `CUDA_VISIBLE_DEVICES=0` to run on single 48GB GPU for maximum speed, or set to more GPUs if required. Model without usage consumes about 36GB, but uses 40GB after simple usage.
+
+NOTE: For long-context input or large max_seq_len, Mixtral GGUF seems unstable at moment.  Even just starting model with 32k context using 2*48 GPUs.  So expect llama.cpp to have more bug fixes.  We have not seen Mixtral work on llama.cpp for more than `--max_seq_len=4096`.
+
+### Video Extraction (experimental)
+
+Ways to get Audio (ASR) and Video extraction:
+* Add Youtube link to Ask Anything and click Ingest
+* Upload video file clicking Upload and selecting your video
+
+By default, image frames are extracted as a separate document, so when viewed in document viewer, the images are shown.  If you prefer them under the same document, set env `FRAMES_AS_SAME_DOC=1`.
+
+If you prefer to disable video extraction, choose `--extract_frames=0` with CLI or pick 0 in Document Control in expert settings in UI.
+
+### Image Generation (experimental)
+
+For image generation, then run:
+```bash
+python --base_model=HuggingFaceH4/zephyr-7b-beta --score_model=None --enable_imagegen=True
+```
+or for high-resolution run use `--enable_imagegen_high=True` (can add both).
+
+### LLaVa Vision Models (experimental)
+
+https://github.com/haotian-liu/LLaVA
+
+Use separate env for workers and server
+```bash
+export CUDA_HOME=/usr/local/cuda-11.8
+export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cu118"
+
+conda create -n llava python=3.10 -y
+conda activate llava
+pip install --upgrade pip  # enable PEP 660 support
+
+# git clone https://github.com/haotian-liu/LLaVA.git
+git clone https://github.com/h2oai/LLaVA.git h2oai_llava
+cd h2oai_llava
+
+pip install -e .
+pip install -e ".[train]"
+pip install flash-attn --no-build-isolation
+```
+
+Run controller:
+```bash
+export server_port=10000
+python -m llava.serve.controller --host 0.0.0.0 --port $server_port
+```
+
+Run a worker
+```bash
+worker_port=40000
+python -m llava.serve.model_worker --host 0.0.0.0 --controller http://localhost:$server_port --port $worker_port --worker http://localhost:$worker_port --model-path liuhaotian/llava-v1.5-13b
+```
+
+Can run multiple workers if put on different ports, e.g. for  more verbose output (but not necessarily technically better), run:
+```bash
+git clone https://github.com/qnguyen3/hermes-llava.git
+cd hermes-llava
+conda create -n llava_hermes python=3.10 -y
+conda activate llava_hermes
+pip install --upgrade pip  # enable PEP 660 support
+pip install -e .
+pip install -e ".[train]"
+pip install flash-attn --no-build-isolation
+pip install transformers==4.34.1
+
+worker_port=40001
+python -m llava.serve.model_worker --host 0.0.0.0 --controller http://localhost:$server_port --port $worker_port --worker http://localhost:$worker_port --model-path NousResearch/Nous-Hermes-2-Vision
+````
+
+Run server:
+```bash
+pip install gradio==3.50.2
+python -m llava.serve.gradio_web_server --controller http://localhost:$server_port --model-list-mode reload
+```
+
+Run h2oGPT with LLaVa and image (normal and high-quality) generation:
+```bash
+python --base_model=HuggingFaceH4/zephyr-7b-beta --score_model=None --llava_model=<IP:port:model_name> --enable_imagegen=True --enable_imagegen_high=True
+```
+e.g. `--llava_model=http://192.168.1.46:7861:llava-v1.5-13b`.
+
 ### Speech-to-Text (STT) and Text-to_Speech (TTS)
 
 To disable STT and TTS, pass `--enable_tts=False --enable_stt=False` to `generate.py`.  Note that STT and TTS models are always preloaded if not disabled, so GPU memory is used if do not disable them.
@@ -64,6 +169,12 @@ There is currently no TTS for CLI.
 In the expert panel you can replay any h2oGPT generation or speak instruction generation.
 
 If you want to stop generation of speech, click "Stop" in top-right to stop generation of text and speech, or click "Stop/Clear Speak" to stop speech when having clicked on "Speak Instruction" and "Speak Response".
+
+### Automatic Speech Recognition (ASR)
+
+ASR is handled with whisper type models for ingesting YouTube videos or other videos.
+
+For Twitter, one can right-click on Twitter video, copy video address, then paste into [TwitterVideoDownloader.com](https://twitter.com/i/status/1732448989336006826) and download the video, right-click on that video and click save as, then upload to h2oGPT.
 
 ### Faster ASR
 
@@ -399,7 +510,7 @@ python generate.py --base_model=HuggingFaceH4/zephyr-7b-beta
 python generate.py --base_model=TheBloke/zephyr-7B-beta-GGUF
 python generate.py --base_model=TheBloke/zephyr-7B-beta-AWQ
 python generate.py --base_model=zephyr-7b-beta.Q5_K_M.gguf
-python generate.py --base_model=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf
+python generate.py --base_model=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf?download=true
 ```
 Some are these are non-quantized models with links HF links, some specific files on local disk ending in `.gguf`.  Given `TheBloke` HF names, if a quantized model, h2oGPT pulls the recommended model from his repository.  You can also provide a resolved web link directly, or a file.
 

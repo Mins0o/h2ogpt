@@ -4,7 +4,7 @@ Turn ★ into ⭐ (top-right corner) if you like the project!
 
 Query and summarize your documents or just chat with local private GPT LLMs using h2oGPT, an Apache V2 open-source project.
 
-- **Private** offline database of any documents [(PDFs, Excel, Word, Images, Youtube, Audio, Code, Text, MarkDown, etc.)](docs/README_LangChain.md#supported-datatypes)
+- **Private** offline database of any documents [(PDFs, Excel, Word, Images, Video Frames, Youtube, Audio, Code, Text, MarkDown, etc.)](docs/README_LangChain.md#supported-datatypes)
   - **Persistent** database (Chroma, Weaviate, or in-memory FAISS) using accurate embeddings (instructor-large, all-MiniLM-L6-v2, etc.)
   - **Efficient** use of context using instruct-tuned LLMs (no need for LangChain's few-shot approach)
   - **Parallel** summarization and extraction, reaching an output of 80 tokens per second with the 13B LLaMa2 model
@@ -14,17 +14,18 @@ Query and summarize your documents or just chat with local private GPT LLMs usin
   - **Attention Sinks** for [arbitrarily long](https://github.com/tomaarsen/attention_sinks) generation (LLaMa-2, Mistral, MPT, Pythia, Falcon, etc.)
 - **UI** or CLI with streaming of all models
   - **Upload** and **View** documents through the UI (control multiple collaborative or personal collections)
+  - **Vision LLaVa** Model and **Stable Diffusion** Image Generation
   - **Voice STT** using Whisper with streaming audio conversion
   - **Voice TTS** using MIT-Licensed Microsoft Speech T5 with multiple voices and Streaming audio conversion
   - **Voice TTS** using MPL2-Licensed TTS including Voice Cloning and Streaming audio conversion
-  - **AI Assistant Voice Control Mode** to hands-free control h2oGPT chat
-  - **Bake-off** UI mode against many models at same time
+  - **AI Assistant Voice Control Mode** for hands-free control of h2oGPT chat
+  - **Bake-off** UI mode against many models at the same time
   - **Easy Download** of model artifacts and control over models like LLaMa.cpp through the UI
   - **Authentication** in the UI by user/password
   - **State Preservation** in the UI by user/password
 - **Linux, Docker, macOS, and Windows** support
   - [**Easy Windows Installer**](#windows-1011-64-bit-with-full-document-qa-capability) for Windows 10 64-bit (CPU/CUDA)
-  - [**Easy MAC Installer**](#macos-cpum1m2-with-full-document-qa-capability) for macOS (CPU/M1/M2)
+  - [**Easy macOS Installer**](#macos-cpum1m2-with-full-document-qa-capability) for macOS (CPU/M1/M2)
 - **Inference Servers** support (HF TGI server, vLLM, Gradio, ExLLaMa, Replicate, OpenAI, Azure OpenAI, Anthropic)
 - **OpenAI-compliant Python client API** for client-server control
 - **Web-Search** integration with Chat and Document Q/A
@@ -32,7 +33,7 @@ Query and summarize your documents or just chat with local private GPT LLMs usin
 - **Evaluate** performance using reward models
 - **Quality** maintained with over 1000 unit and integration tests taking over 4 GPU-hours
 
-### Getting Started
+### Get Started
 
 [![GitHub license](https://img.shields.io/github/license/NVIDIA/nvidia-docker?style=flat-square)](https://raw.githubusercontent.com/h2oai/h2ogpt/main/LICENSE)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/h2oai/h2ogpt/blob/main/docs/README_LINUX.md)
@@ -40,17 +41,33 @@ Query and summarize your documents or just chat with local private GPT LLMs usin
 [![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/h2oai/h2ogpt/blob/main/docs/README_WINDOWS.md)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/h2oai/h2ogpt/blob/main/docs/README_DOCKER.md)
 
-To quickly try out h2oGPT on CPU with limited document Q/A capability using LLaMa2 7B Chat, create a fresh Python 3.10 environment and run:
-```bash
-git clone https://github.com/h2oai/h2ogpt.git
-cd h2ogpt
-pip install -r requirements.txt
-pip install -r reqs_optional/requirements_optional_langchain.txt
-pip install -r reqs_optional/requirements_optional_gpt4all.txt
-python generate.py --base_model=llama --prompt_type=llama2 --model_path_llama=https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf --max_seq_len=4096
-```
+
+To quickly try out h2oGPT with limited document Q/A capability, create a fresh Python 3.10 environment and run:
+* CPU or MAC (M1/M2):
+   ```bash
+   # for windows/mac use "set" or relevant environment setting mechanism
+   export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu"
+   ```
+* Linux/Windows CUDA:
+   ```bash
+   # for windows/mac use "set" or relevant environment setting mechanism
+   export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cu118"
+   ```
+Then do on any system:
+   ```bash
+   git clone https://github.com/h2oai/h2ogpt.git
+   cd h2ogpt
+   pip install -r requirements.txt
+   pip install -r reqs_optional/requirements_optional_langchain.txt
+   pip install -r reqs_optional/requirements_optional_gpt4all.txt
+   pip install -r reqs_optional/requirements_optional_langchain.urls.txt
+   # GPL, only run next line if that is ok:
+   # pip install -r reqs_optional/requirements_optional_langchain.gpllike.txt
+
+   python generate.py --base_model=TheBloke/zephyr-7B-beta-GGUF --prompt_type=zephyr --max_seq_len=4096
+   ```
 then go to your browser by visiting [http://127.0.0.1:7860](http://127.0.0.1:7860) or [http://localhost:7860](http://localhost:7860).  Choose 13B for a better model than 7B.
-If you encounter issues with `llama-cpp-python` or other packages that try to compile and fail, try binary wheels for your platform as linked in the detailed instructions below.
+If you encounter issues with `llama-cpp-python` or other packages that try to compile and fail, try binary wheels for your platform as linked in the detailed instructions below.  For AVX1 or AMD ROC systems, edit `reqs_optional/requirements_optional_gpt4all.txt` to choose valid packages.
 
 We recommend quantized models for most small-GPU systems, e.g. [LLaMa-2-7B-Chat-GGUF](https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf) for 9GB+ GPU memory or larger models like [LLaMa-2-13B-Chat-GGUF](https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-13b-chat.Q6_K.gguf) if you have 16GB+ GPU memory.
 
@@ -94,10 +111,10 @@ We recommend quantized models for most small-GPU systems, e.g. [LLaMa-2-7B-Chat-
   - [h2ogpt-osx-m1-cpu](https://h2o-release.s3.amazonaws.com/h2ogpt/Nov2023/h2ogpt-osx-m1-cpu)
   - [h2ogpt-osx-m1-gpu](https://h2o-release.s3.amazonaws.com/h2ogpt/Nov2023/h2ogpt-osx-m1-gpu)
   
-  Download the runnable file and open it from finder, it will take few minutes to unpack and run the application.
-  These one-click installers are experimental, report any issues with steps to reproduce at https://github.com/h2oai/h2ogpt/issues.
+  Download the runnable file and open it from the Finder. It will take a few minutes to unpack and run the application.
+  These one-click installers are experimental. Report any issues with steps to reproduce at https://github.com/h2oai/h2ogpt/issues.
 
-  **Note:** The app bundle is unsigned, if there are any issues in running the app
+  **Note:** The app bundle is unsigned. If you experience any issues with running the app, run the following commands:
   ```bash
   $ xattr -dr com.apple.quarantine {file-path}/h2ogpt-osx-m1-gpu
   $ chmod +x {file-path}/h2ogpt-osx-m1-gpu
@@ -154,7 +171,7 @@ YouTube 4K version: https://www.youtube.com/watch?v=_iktbj4obAI
 
 ### Docs Guide
 <!--  cat README.md | ./gh-md-toc  -  But Help is heavily processed -->
-* [Getting Started](#getting-started)
+* [Get Started](#get-started)
    * [Linux (CPU or CUDA)](docs/README_LINUX.md)
    * [macOS (CPU or M1/M2)](docs/README_MACOS.md)
    * [Windows 10/11 (CPU or CUDA)](docs/README_WINDOWS.md)
@@ -212,7 +229,6 @@ These are not part of normal installation instructions and are experimental.
 - To fine-tune any LLM models on your data, follow the [fine-tuning instructions](docs/FINETUNE.md).
 - To run h2oGPT tests:
     ```bash
-    wget https://huggingface.co/TheBloke/Llama-2-7b-Chat-GGUF/resolve/main/llama-2-7b-chat.Q6_K.gguf
     pip install requirements-parser pytest-instafail pytest-random-order
     pip install playsound==1.3.0
     pytest --instafail -s -v tests
