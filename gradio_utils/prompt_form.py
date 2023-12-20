@@ -60,6 +60,7 @@ def get_avatars(base_model, model_path_llama, inference_server=''):
         bot_avatar = "models/google.png"
     else:
         bot_avatar = "models/h2oai.png"
+    bot_avatar = "MeIcon.jpg"
     human_avatar = human_avatar if os.path.isfile(human_avatar) else None
     bot_avatar = bot_avatar if os.path.isfile(bot_avatar) else None
     return human_avatar, bot_avatar

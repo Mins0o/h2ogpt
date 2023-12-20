@@ -8,7 +8,8 @@ export HOME=/workspace
 export CUDA_HOME=/usr/local/cuda-11.8
 
 # Install linux dependencies
-apt-get update && apt-get install -y \
+apt-get update && apt-get install -y apt-utils
+apt-get install -y \
     git \
     curl \
     wget \
@@ -21,7 +22,8 @@ apt-get update && apt-get install -y \
     libtesseract-dev \
     libreoffice \
     autoconf \
-    libtool
+    libtool \
+    libtcmalloc-minimal4
 
 # Run upgrades
 apt-get upgrade -y

@@ -46,7 +46,7 @@ css = ".generating {visibility: hidden}"
 
 with gr.Blocks(theme=theme) as demo:
     gr.Markdown(
-        """<h1><center>h2oGPT</center></h1>
+        """<h1><center>MemesooGPT</center></h1>
 """
     )
     with gr.Row():
@@ -59,7 +59,7 @@ with gr.Blocks(theme=theme) as demo:
     with gr.Row():
         with gr.Column():
             with gr.Box():
-                gr.Markdown("**h2oGPT**")
+                gr.Markdown("**MemesooGPT**")
                 output = gr.Markdown()
     with gr.Row():
         gr.Examples(

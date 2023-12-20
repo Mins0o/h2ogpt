@@ -228,7 +228,7 @@ def go_gradio(**kwargs):
         instruction_label_nochat = "Instruction (Shift-Enter or push Submit to send message," \
                                    " use Enter for multiple input lines)"
 
-    title = 'h2oGPT'
+    title = 'MemesooGPT'
     if kwargs['visible_h2ogpt_links']:
         description = """<iframe src="https://ghbtns.com/github-btn.html?user=h2oai&repo=h2ogpt&type=star&count=true&size=small" frameborder="0" scrolling="0" width="280" height="20" title="GitHub"></iframe><small><a href="https://github.com/h2oai/h2ogpt">h2oGPT</a> <a href="https://evalgpt.ai/">LLM Leaderboard</a> <a href="https://github.com/h2oai/h2o-llmstudio">LLM Studio</a><br /><a href="https://codellama.h2o.ai">CodeLlama</a> <br /><a href="https://huggingface.co/h2oai">🤗 Models</a> <br /><a href="https://h2o.ai/platform/enterprise-h2ogpt/">h2oGPTe</a>"""
     else:
@@ -263,7 +263,7 @@ def go_gradio(**kwargs):
                                  radius_size=gr.themes.sizes.spacing_md))
 
     theme = H2oTheme(**theme_kwargs) if kwargs['h2ocolors'] else SoftTheme(**theme_kwargs)
-    demo = gr.Blocks(theme=theme, css=css_code, title="h2oGPT", analytics_enabled=False)
+    demo = gr.Blocks(theme=theme, css=css_code, title="memesoogpt - powered by h2ogpt", analytics_enabled=False)
     callback = gr.CSVLogger()
 
     # modify, if model lock then don't show models, then need prompts in expert
@@ -317,7 +317,7 @@ def go_gradio(**kwargs):
     # transcribe for gradio
     kwargs['gpu_id'] = str(kwargs['gpu_id'])
 
-    no_model_msg = 'h2oGPT [   !!! Please Load Model in Models Tab !!!   ]'
+    no_model_msg = 'MemesooGPT [   !!! Please Load Model in Models Tab !!!   ]'
     chat_name0 = get_chatbot_name(kwargs.get("base_model"), kwargs.get("llamacpp_dict", {}).get("model_path_llama"))
     output_label0 = chat_name0 if kwargs.get('base_model') else no_model_msg
     output_label0_model2 = no_model_msg
@@ -2074,7 +2074,7 @@ def go_gradio(**kwargs):
                     with system_row:
                         with gr.Accordion("Admin", open=False, visible=True):
                             with gr.Column():
-                                close_btn = gr.Button(value="Shutdown h2oGPT", size='sm',
+                                close_btn = gr.Button(value="Shutdown MemesooGPT", size='sm',
                                                       visible=kwargs['close_button'] and kwargs[
                                                           'h2ogpt_pid'] is not None)
                                 with gr.Row():
@@ -5608,7 +5608,7 @@ def go_gradio(**kwargs):
                 load_event7 = load_event6.then(**viewable_kwargs)
 
     demo.queue(**queue_kwargs, api_open=kwargs['api_open'])
-    favicon_file = "MeIcon.png"
+    favicon_file = "MeIcon.jpg"
     favicon_path = favicon_file
     if not os.path.isfile(favicon_file):
         print("favicon_path1=%s not found" % favicon_file, flush=True)
