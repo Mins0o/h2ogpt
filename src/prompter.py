@@ -81,6 +81,7 @@ prompt_type_to_model_name = {
         'h2oai/h2ogpt-research-oasst1-llama-65b',
         'h2oai/h2ogpt-oasst1-falcon-40b',
         'h2oai/h2ogpt-oig-oasst1-falcon-40b',
+        'llmware/dragon-mistral-7b-v0',  # https://huggingface.co/llmware/dragon-mistral-7b-v0
     ],
     'dai_faq': [],
     'summarize': [],
@@ -134,7 +135,8 @@ prompt_type_to_model_name = {
         'TheBloke/Llama-2-7B-Chat-GGUF',
     ],
     "mistral": ['mistralai/Mistral-7B-Instruct-v0.1', 'TheBloke/Mistral-7B-Instruct-v0.1-GGUF',
-                'mistralai/Mixtral-8x7B-Instruct-v0.1', 'TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF'],
+                'mistralai/Mixtral-8x7B-Instruct-v0.1', 'TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF',
+                'TheBloke/Mixtral-8x7B-Instruct-v0.1-GPTQ'],
     "zephyr": ['HuggingFaceH4/zephyr-7b-alpha', 'HuggingFaceH4/zephyr-7b-beta', 'TheBloke/zephyr-7B-beta-GGUF',
                'TheBloke/zephyr-7B-beta-AWQ', 'zephyr-7b-beta.Q5_K_M.gguf'],
     "beluga": ['stabilityai/StableBeluga2', 'psmathur/orca_mini_v3_7b'],
@@ -156,8 +158,11 @@ prompt_type_to_model_name = {
     "open_chat": ['openchat/openchat_3.5', 'TheBloke/openchat_3.5-GPTQ', 'TheBloke/openchat_3.5-GGUF',
                   'TheBloke/openchat_3.5-AWQ', 'TheBloke/openchat_3.5-16k-AWQ',
                   'openchat_3.5.Q5_K_M.gguf', 'NurtureAI/openchat_3.5-16k'],
-    "open_chat_correct": ['berkeley-nest/Starling-LM-7B-alpha'],  # can be any from open_chat list, by using this prompt
+    "open_chat_correct": ['berkeley-nest/Starling-LM-7B-alpha', 'openchat/openchat-3.5-1210',
+                          'openchat/openchat_3.5', 'openchat/openchat_v3.2_super',
+                          ],  # can be any from open_chat list, by using this prompt
     "open_chat_code": [],  # can be any from open_chat list, by using this prompt
+    "open_chat_math": [],  # can be any from open_chat list, by using this prompt
     "jais": ['core42/jais-30b-chat-v1'],
     "yi": ['01-ai/Yi-34B-Chat', 'TheBloke/Yi-34B-Chat-AWQ'],
     "docsgpt": ['Arc53/docsgpt-7b-mistral'],
@@ -1127,7 +1132,9 @@ Remember to tailor the activities to the birthday child's interests and preferen
             prompt_type in [PromptType.open_chat_correct.value, str(PromptType.open_chat_correct.value),
                             PromptType.open_chat_correct.name] or \
             prompt_type in [PromptType.open_chat_code.value, str(PromptType.open_chat_code.value),
-                            PromptType.open_chat_code.name]:
+                            PromptType.open_chat_code.name] or \
+            prompt_type in [PromptType.open_chat_math.value, str(PromptType.open_chat_math.value),
+                            PromptType.open_chat_math.name]:
         # https://huggingface.co/TheBloke/openchat_3.5-GPTQ#prompt-template-openchat
         # https://github.com/imoneoi/openchat/tree/master#-inference-with-transformers
         # GPT4 Correct User: Hello<|end_of_turn|>GPT4 Correct Assistant: Hi<|end_of_turn|>GPT4 Correct User: How are you today?<|end_of_turn|>GPT4 Correct Assistant:
@@ -1144,6 +1151,10 @@ Remember to tailor the activities to the birthday child's interests and preferen
                              PromptType.open_chat_correct.name]:
             PreInstruct = "GPT4 Correct User: "
             PreResponse = "GPT4 Correct Assistant:"
+        elif prompt_type in [PromptType.open_chat_math.value, str(PromptType.open_chat_math.value),
+                             PromptType.open_chat_math.name]:
+            PreInstruct = "Math Correct User: "
+            PreResponse = "Math Correct Assistant:"
         else:
             PreInstruct = "Code User: "
             PreResponse = "Code Assistant:"
@@ -1202,7 +1213,7 @@ Remember to tailor the activities to the birthday child's interests and preferen
         PreInstruct = """### Instruction\n"""
         PreInput = None
         PreResponse = """### Answer\n"""
-        terminate_response = ['### Answer']
+        terminate_response = ['### Answer', '### Instruction']
         chat_turn_sep = chat_sep = '\n'
         humanstr = PreInstruct
         botstr = PreResponse
@@ -1473,6 +1484,14 @@ class Prompter(object):
             hfix = '<human'
             if text1.endswith(hfix):
                 text1 = text1[:-len(hfix)]
+            hfix = '<bot'
+            if text1.endswith(hfix):
+                text1 = text1[:-len(hfix)]
+        if prompt_type1 == 'docsgpt':
+            # hack bug in vLLM with stopping, stops right, but doesn't return last token
+            hfix = '### Inst'
+            if text1.endswith(hfix):
+                text1 = text1[:-len(hfix)]
         return text1
 
 
@@ -1551,7 +1570,7 @@ def step_back_prompts(which):
         return f"""You are a mathematician or physicist.  {gen1}"""
     elif which == 2:
         return f"""You are a mathematician or physicist.  {gen2}"""
-    elif which == 2:
+    elif which == 3:
         return f"""You are a very helpful expert at the topic of the question.  {gen3}"""
 
     else:

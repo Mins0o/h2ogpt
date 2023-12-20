@@ -1397,6 +1397,24 @@ class H2OHuggingFacePipeline(HuggingFacePipeline):
     prompts: Any = []
     count_output_tokens: Any = 0
 
+    def _generate(
+        self,
+        prompts: List[str],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> LLMResult:
+        self.count_input_tokens += sum([self.get_num_tokens(x) for x in prompts])
+        rets = super()._generate(prompts, stop=stop, run_manager=run_manager, **kwargs)
+        try:
+            self.count_output_tokens += sum(
+                [self.get_num_tokens(z) for z in flatten_list([[x.text for x in y] for y in rets.generations])])
+        except Exception as e:
+            if os.getenv('HARD_ASSERTS'):
+                raise
+            print("Failed to get total output tokens\n%s\n" % traceback.format_exc())
+        return rets
+
     def _call(
             self,
             prompt: str,
@@ -1472,6 +1490,7 @@ def get_llm(use_openai_model=False,
             max_input_tokens=None,
             max_total_input_tokens=None,
             attention_sinks=None,
+            sink_dict={},
             truncation_generation=None,
 
             n_jobs=None,
@@ -1499,10 +1518,14 @@ def get_llm(use_openai_model=False,
         min_max_new_tokens = 256
 
     model_max_length = tokenizer.model_max_length
-    if max_input_tokens >= 0:
-        max_input_tokens = min(model_max_length - min_max_new_tokens, max_input_tokens)
+    if not attention_sinks:
+        if max_input_tokens >= 0:
+            max_input_tokens = min(model_max_length - min_max_new_tokens, max_input_tokens)
+        else:
+            max_input_tokens = model_max_length - min_max_new_tokens
     else:
-        max_input_tokens = model_max_length - min_max_new_tokens
+        if max_input_tokens < 0:
+            max_input_tokens = model_max_length
 
     if n_jobs in [None, -1]:
         n_jobs = int(os.getenv('OMP_NUM_THREADS', str(os.cpu_count() // 2)))
@@ -1936,6 +1959,13 @@ def get_llm(use_openai_model=False,
             gen_kwargs.update(dict(penalty_alpha=penalty_alpha))
             assert len(set(gen_hyper0).difference(gen_kwargs.keys())) == 0
 
+        if attention_sinks:
+            from transformers import SinkCache
+            sink_dict['window_length'] = sink_dict.get('window_length', max_input_tokens)
+            sink_dict['num_sink_tokens'] = sink_dict.get('num_sink_tokens', 4)
+            cache = SinkCache(**sink_dict)
+            gen_kwargs.update(dict(past_key_values=cache))
+
         if stream_output:
             skip_prompt = only_new_text
             from gen import H2OTextIteratorStreamer
@@ -2349,8 +2379,13 @@ def file_to_doc(file,
         'http://www.youtube.com/watch?v=',
         'www.youtube.com/watch?v=',
         'youtube.com/watch?v=',
+        'https://youtube.com/watch?v=',
+        'http://youtube.com/watch?v=',
+
         'https://www.youtube.com/shorts/',
         'http://www.youtube.com/shorts/',
+        'https://youtube.com/shorts/',
+        'http://youtube.com/shorts/',
         'www.youtube.com/shorts/',
         'youtube.com/shorts/'
     ]
@@ -3204,7 +3239,6 @@ def file_to_doc(file,
         # recurse
         doc1 = path_to_docs_func(de_file,
                                  filei=filei,  # single file, same file index as outside caller
-                                 base_path=base_path,
                                  )
 
     else:
@@ -3377,6 +3411,7 @@ def path_to_doc1(file,
 
 
 def path_to_docs(path_or_paths,
+                 filei=None,
                  url=None, text=None,
 
                  verbose=False, fail_any_exception=False, n_jobs=-1,
@@ -3579,15 +3614,16 @@ def path_to_docs(path_or_paths,
         return x
 
     my_tqdm = no_tqdm if not verbose else tqdm
+    filei0 = filei
 
     if n_jobs != 1 and len(globs_non_image_types) > 1:
         # avoid nesting, e.g. upload 1 zip and then inside many files
         # harder to handle if upload many zips with many files, inner parallel one will be disabled by joblib
         documents = ProgressParallel(n_jobs=n_jobs, verbose=10 if verbose else 0, backend='multiprocessing')(
-            delayed(path_to_doc1)(file, filei=filei, **kwargs) for filei, file in enumerate(globs_non_image_types)
+            delayed(path_to_doc1)(file, filei=filei0 or filei, **kwargs) for filei, file in enumerate(globs_non_image_types)
         )
     else:
-        documents = [path_to_doc1(file, filei=filei, **kwargs) for filei, file in
+        documents = [path_to_doc1(file, filei=filei0 or filei, **kwargs) for filei, file in
                      enumerate(my_tqdm(globs_non_image_types))]
 
     # do images separately since can't fork after cuda in parent, so can't be parallel
@@ -3595,10 +3631,10 @@ def path_to_docs(path_or_paths,
         # avoid nesting, e.g. upload 1 zip and then inside many files
         # harder to handle if upload many zips with many files, inner parallel one will be disabled by joblib
         image_documents = ProgressParallel(n_jobs=n_jobs, verbose=10 if verbose else 0, backend='multiprocessing')(
-            delayed(path_to_doc1)(file, filei=filei, **kwargs) for filei, file in enumerate(globs_image_audio_types)
+            delayed(path_to_doc1)(file, filei=filei0 or filei, **kwargs) for filei, file in enumerate(globs_image_audio_types)
         )
     else:
-        image_documents = [path_to_doc1(file, filei=filei, **kwargs) for filei, file in
+        image_documents = [path_to_doc1(file, filei=filei0 or filei, **kwargs) for filei, file in
                            enumerate(my_tqdm(globs_image_audio_types))]
 
     # unload loaders (image loaders, includes enable_pdf_doctr that uses same loader)
@@ -4627,6 +4663,7 @@ def _run_qa_db(query=None,
                max_new_tokens=512,
                min_new_tokens=1,
                attention_sinks=False,
+               sink_dict={},
                truncation_generation=False,
                early_stopping=False,
                regenerate_clients=None,
@@ -4820,6 +4857,7 @@ Respond to prompt of Final Answer with your final well-structured%s answer to th
                       cli=cli,
                       verbose=verbose,
                       attention_sinks=attention_sinks,
+                      sink_dict=sink_dict,
                       truncation_generation=truncation_generation,
                       )
     llm, model_name, streamer, prompt_type_out, async_output, only_new_text, gradio_server = \
@@ -5924,16 +5962,21 @@ def get_chain(query=None,
                      doc_json_mode,
                      prompter=prompter)
 
-    # use min_max_new_tokens instead of max_new_tokens for max_new_tokens to get largest input allowable
-    # else max_input_tokens interpreted as user input as smaller than possible and get over-restricted
-    max_input_tokens_default = get_max_input_tokens(llm=llm, tokenizer=tokenizer, inference_server=inference_server,
-                                                    model_name=model_name, max_new_tokens=min_max_new_tokens)
-    if max_input_tokens >= 0:
-        max_input_tokens = min(max_input_tokens_default, max_input_tokens)
-    else:
-        max_input_tokens = max_input_tokens_default
     model_max_length = get_model_max_length(llm=llm, tokenizer=tokenizer, inference_server=inference_server,
                                             model_name=model_name)
+
+    if not attention_sinks:
+        # use min_max_new_tokens instead of max_new_tokens for max_new_tokens to get the largest input allowable
+        # else max_input_tokens interpreted as user input as smaller than possible and get over-restricted
+        max_input_tokens_default = get_max_input_tokens(llm=llm, tokenizer=tokenizer, inference_server=inference_server,
+                                                        model_name=model_name, max_new_tokens=min_max_new_tokens)
+        if max_input_tokens >= 0:
+            max_input_tokens = min(max_input_tokens_default, max_input_tokens)
+        else:
+            max_input_tokens = max_input_tokens_default
+    else:
+        if max_input_tokens < 0:
+            max_input_tokens = model_max_length
 
     if hasattr(db, '_persist_directory'):
         lock_file = get_db_lock_file(db, lock_type='sim')
@@ -6170,6 +6213,7 @@ def get_chain(query=None,
                                max_input_tokens=max_input_tokens,
                                truncation_generation=truncation_generation,
                                gradio_server=gradio_server,
+                               attention_sinks=attention_sinks,
                                )
         # get updated llm
         llm_kwargs.update(max_new_tokens=max_new_tokens, context=context, iinput=iinput, system_prompt=system_prompt)

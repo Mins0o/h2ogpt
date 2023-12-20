@@ -77,7 +77,7 @@ langchain_actions = [x.value for x in list(LangChainAction)]
 langchain_agents_list = [x.value for x in list(LangChainAgent)]
 
 
-def switch_a_roo_llama(base_model, model_path_llama, load_gptq, load_awq, n_gqa):
+def switch_a_roo_llama(base_model, model_path_llama, load_gptq, load_awq, n_gqa, llamacpp_path):
     # from TheBloke HF link
     is_gguf = 'GGUF'.lower() in base_model.lower()
     is_ggml = 'GGML'.lower() in base_model.lower()
@@ -110,6 +110,10 @@ def switch_a_roo_llama(base_model, model_path_llama, load_gptq, load_awq, n_gqa)
         elif os.path.isfile(base_model):
             # then file but still either gguf or ggml
             model_path_llama = base_model
+            base_model = 'llama'
+        elif os.path.isfile(os.path.join(llamacpp_path, base_model)):
+            # then file but still either gguf or ggml
+            model_path_llama = os.path.join(llamacpp_path, base_model)
             base_model = 'llama'
 
     # some auto things for TheBloke models:
@@ -288,6 +292,8 @@ def main(
         pdf_height: int = 800,
         avatars: bool = True,
         add_disk_models_to_ui=True,
+        page_title: str = "memesooGPT - Powered by h2ogpt",
+        favicon_path: str = "MeIcon.jpg",
 
         sanitize_user_prompt: bool = False,
         sanitize_bot_response: bool = False,
@@ -574,6 +580,8 @@ def main(
     :param attention_sinks: Whether to enable attention sinks. Requires in local repo:
          git clone https://github.com/tomaarsen/attention_sinks.git
     :param sink_dict: dict of options for attention sinks
+           E.g. {'window_length': 1024, 'num_sink_tokens': 4}
+           Default is window length same size as max_input_tokens (max_seq_len if max_input_tokens not set)
     :param hf_model_dict: dict of options for HF models using transformers
 
     :param truncation_generation: Whether (for torch) to terminate generation once reach context length of model.
@@ -794,6 +802,8 @@ def main(
     :param pdf_height: Height of PDF viewer in UI
     :param avatars: Whether to show avatars in chatbot
     :param add_disk_models_to_ui: Whether to add HF cache models and llama.cpp models to UI
+    :param page_title: Title of the web page, default is h2oGPT
+    :param favicon_path: Path to favicon, default is h2oGPT favicon
 
     :param sanitize_user_prompt: whether to remove profanity from user input (slows down input processing)
       Requires optional packages:
@@ -1096,7 +1106,8 @@ def main(
     # switch-a-roo on base_model so can pass GGUF/GGML as base model
     base_model0 = base_model  # for prompt infer
     base_model, model_path_llama, load_gptq, load_awq, llamacpp_dict['n_gqa'] = \
-        switch_a_roo_llama(base_model, model_path_llama, load_gptq, load_awq, llamacpp_dict.get('n_gqa', 0))
+        switch_a_roo_llama(base_model, model_path_llama, load_gptq, load_awq,
+                           llamacpp_dict.get('n_gqa', 0), llamacpp_path)
 
     # add others to single dict
     llamacpp_dict['model_path_llama'] = model_path_llama
@@ -1853,7 +1864,8 @@ def main(
                                    model_dict['llamacpp_dict']['model_path_llama'],
                                    model_dict['load_gptq'],
                                    model_dict['load_awq'],
-                                   model_dict['llamacpp_dict'].get('n_gqa', 0))
+                                   model_dict['llamacpp_dict'].get('n_gqa', 0),
+                                   llamacpp_path)
 
             # begin prompt adjustments
             # get query prompt for (say) last base model if using model lock
@@ -1988,6 +2000,8 @@ def get_config(base_model,
         except OSError as e:
             if raise_exception:
                 raise
+            if base_model in anthropic_gpts + openai_gpts + google_gpts + non_hf_types:
+                return None, None, max_seq_len
             if 'not a local folder and is not a valid model identifier listed on' in str(
                     e) or '404 Client Error' in str(e) or "couldn't connect" in str(e):
                 # e.g. llama, gpjt, etc.
@@ -1996,6 +2010,8 @@ def get_config(base_model,
                     print("Could not determine --max_seq_len, setting to 2048.  Pass if not correct", flush=True)
                     max_seq_len = 2048
                 # HF TGI server only should really require prompt_type, not HF model state
+                print("Not using tokenizer from HuggingFace:\n\n", flush=True)
+                traceback.print_exc()
                 return None, None, max_seq_len
             else:
                 raise
@@ -2227,6 +2243,7 @@ def get_model_retry(**kwargs):
                 kwargs['gptq_dict'].update(
                     {'inject_fused_attention': False, 'disable_exllama': True})
             if 'Could not find model' in stre or \
+                    'Could not a find model' in stre or \
                     'safetensors' in stre or \
                     'not appear to have a file named pytorch_model.bin' in stre:
                 kwargs['use_safetensors'] = True
@@ -2273,9 +2290,6 @@ def get_model(
         llamacpp_dict=None,
         exllama_dict=None,
         gptq_dict=None,
-        attention_sinks=None,
-        sink_dict=None,
-        truncation_generation=None,
         hf_model_dict={},
 
         verbose: bool = False,
@@ -2361,18 +2375,31 @@ def get_model(
 
     model_name_exllama_if_no_config = '' if not llamacpp_dict else llamacpp_dict.get('model_name_exllama_if_no_config',
                                                                                      '')
-    model_loader, tokenizer_loader, conditional_type = (
-        get_loaders(model_name=base_model, reward_type=reward_type, llama_type=llama_type,
-                    load_gptq=load_gptq,
-                    use_autogptq=use_autogptq,
-                    load_awq=load_awq, load_exllama=load_exllama,
-                    config=config,
-                    rope_scaling=rope_scaling, max_seq_len=max_seq_len,
-                    model_name_exllama_if_no_config=model_name_exllama_if_no_config,
-                    exllama_dict=exllama_dict, gptq_dict=gptq_dict,
-                    attention_sinks=attention_sinks, sink_dict=sink_dict,
-                    truncation_generation=truncation_generation,
-                    hf_model_dict=hf_model_dict))
+    loader_kwargs = dict(model_name=base_model, reward_type=reward_type, llama_type=llama_type,
+                         load_gptq=load_gptq,
+                         use_autogptq=use_autogptq,
+                         load_awq=load_awq, load_exllama=load_exllama,
+                         config=config,
+                         rope_scaling=rope_scaling, max_seq_len=max_seq_len,
+                         model_name_exllama_if_no_config=model_name_exllama_if_no_config,
+                         exllama_dict=exllama_dict, gptq_dict=gptq_dict,
+                         hf_model_dict=hf_model_dict)
+    model_loader, tokenizer_loader, conditional_type = get_loaders(**loader_kwargs)
+
+    if not tokenizer_base_model:
+        tokenizer_base_model = base_model
+        config_tokenizer = config
+        # ignore sequence length of tokenizer
+    else:
+        # get tokenizer specific objects
+        config_tokenizer, _, max_seq_len_tokenizer = get_config(tokenizer_base_model, **config_kwargs,
+                                                                raise_exception=False)
+        if config is None:
+            assert max_seq_len, "Must set max_seq_len if passing different tokenizer than model that cannot be found (config is None) e.g. because a private model"
+
+        loader_kwargs_tokenizer = loader_kwargs.copy()
+        loader_kwargs_tokenizer['model_name'] = tokenizer_base_model
+        _, tokenizer_loader, _ = get_loaders(**loader_kwargs_tokenizer)
 
     tokenizer_kwargs = dict(local_files_only=local_files_only,
                             resume_download=resume_download,
@@ -2381,15 +2408,14 @@ def get_model(
                             offload_folder=offload_folder,
                             revision=revision,
                             padding_side='left',
-                            config=config,
+                            config=config_tokenizer,
                             )
-    if not tokenizer_base_model:
-        tokenizer_base_model = base_model
 
     if load_exllama:
         tokenizer = tokenizer_loader
-    elif config is not None and tokenizer_loader is not None and not isinstance(tokenizer_loader, str):
+    elif config_tokenizer is not None and tokenizer_loader is not None and not isinstance(tokenizer_loader, str):
         if load_exllama:
+            assert base_model == tokenizer_base_model
             tokenizer = tokenizer_loader
         else:
             tokenizer = tokenizer_loader.from_pretrained(tokenizer_base_model, **tokenizer_kwargs)
@@ -2561,6 +2587,11 @@ def get_model(
 
         return model, tokenizer, inference_server
 
+    if inference_server and base_model in non_hf_types and tokenizer is None:
+        assert max_seq_len is not None, "Please pass --max_seq_len=<max_seq_len> for non-HF model %s" % base_model
+        tokenizer = FakeTokenizer(model_max_length=max_seq_len - 50, is_openai=True)
+        return model, tokenizer, inference_server
+
     # shouldn't reach here if had inference server
     assert not inference_server, "Malformed inference_server=%s" % inference_server
 
@@ -2607,10 +2638,8 @@ def get_model(
                         llama_type=llama_type,
                         config_kwargs=config_kwargs,
                         tokenizer_kwargs=tokenizer_kwargs,
+                        loader_kwargs=loader_kwargs,
                         gptq_dict=gptq_dict,
-                        attention_sinks=attention_sinks,
-                        sink_dict=sink_dict,
-                        truncation_generation=truncation_generation,
                         hf_model_dict=hf_model_dict,
 
                         verbose=verbose)
@@ -2645,10 +2674,8 @@ def get_hf_model(load_8bit: bool = False,
                  llama_type: bool = False,
                  config_kwargs=None,
                  tokenizer_kwargs=None,
+                 loader_kwargs=None,
                  gptq_dict=None,
-                 attention_sinks=None,
-                 sink_dict=None,
-                 truncation_generation=None,
                  hf_model_dict=None,
 
                  verbose: bool = False,
@@ -2673,22 +2700,24 @@ def get_hf_model(load_8bit: bool = False,
         "Please choose a base model with --base_model (CLI) or load one from Models Tab (gradio)"
     )
 
-    model_loader, tokenizer_loader, conditional_type = (
-        get_loaders(model_name=base_model, reward_type=reward_type, llama_type=llama_type,
-                    load_gptq=load_gptq,
-                    use_autogptq=use_autogptq,
-                    load_awq=load_awq, load_exllama=load_exllama,
-                    exllama_dict=exllama_dict, gptq_dict=gptq_dict,
-                    attention_sinks=attention_sinks, sink_dict=sink_dict,
-                    truncation_generation=truncation_generation,
-                    hf_model_dict=hf_model_dict))
-
     config, _, max_seq_len = get_config(base_model, return_model=False, raise_exception=True, **config_kwargs)
+
+    model_loader, tokenizer_loader, conditional_type = get_loaders(**loader_kwargs)
+
+    if not tokenizer_base_model:
+        tokenizer_base_model = base_model
+        # ignore sequence length of tokenizer
+    else:
+        loader_kwargs_tokenizer = loader_kwargs.copy()
+        loader_kwargs_tokenizer['model_name'] = tokenizer_base_model
+        _, tokenizer_loader, _ = get_loaders(**loader_kwargs_tokenizer)
 
     if tokenizer_loader is not None and not isinstance(tokenizer_loader, str):
         if load_exllama:
             tokenizer = tokenizer_loader
         else:
+            # tokenizer_kwargs already contains config=config_tokenizer
+            assert tokenizer_kwargs.get('config') is not None, "Tokenizer is invalid: %s" % tokenizer_base_model
             tokenizer = tokenizer_loader.from_pretrained(tokenizer_base_model,
                                                          **tokenizer_kwargs)
     else:
@@ -3007,7 +3036,8 @@ def get_score_model(score_model: str = None,
 
 
 def evaluate_fake(*args, **kwargs):
-    yield dict(response=invalid_key_msg, sources='', save_dict=dict(), llm_answers={}, response_no_refs='',
+    yield dict(response=invalid_key_msg, sources='', save_dict=dict(extra_dict=dict(base_model='')),
+               llm_answers={}, response_no_refs='',
                sources_str='', audio=None, prompt_raw='')
     return
 
@@ -3246,7 +3276,9 @@ def evaluate(
         response = (image_file,)
         extra_dict = dict(t_generate=time.time() - t_generate,
                           instruction=instruction,
-                          prompt_raw=instruction)
+                          prompt_raw=instruction,
+                          prompt_type=prompt_type,
+                          base_model=LangChainAction.IMAGE_GENERATE.value)
         save_dict = dict(prompt=instruction, output=response, extra_dict=extra_dict)
         yield dict(response=response, sources=[], save_dict=save_dict, llm_answers={},
                    response_no_refs="Generated image for %s" % instruction,
@@ -3463,6 +3495,42 @@ def evaluate(
         # easier to manage prompt etc. by doing full langchain path
         do_langchain_path = True
 
+    gen_hyper_dict = dict(do_sample=do_sample,
+                          temperature=temperature,
+                          repetition_penalty=repetition_penalty,
+                          top_p=top_p,
+                          top_k=top_k,
+                          penalty_alpha=penalty_alpha,
+                          num_beams=num_beams,
+                          min_new_tokens=min_new_tokens,
+                          max_new_tokens=max_new_tokens,
+                          early_stopping=early_stopping,
+                          max_time=max_time,
+                          num_return_sequences=num_return_sequences,
+                          )
+    extra_dict = gen_hyper_dict.copy()
+    extra_dict.update(dict(base_model=base_model,
+                           prompt_type=prompt_type,
+                           inference_server=inference_server,
+                           langchain_mode=langchain_mode,
+                           langchain_action=langchain_action,
+                           langchain_agents=langchain_agents,
+                           document_subset=document_subset,
+                           document_choice=document_choice,
+                           document_source_substrings=document_source_substrings,
+                           document_source_substrings_op=document_source_substrings_op,
+                           document_content_substrings=document_content_substrings,
+                           document_content_substrings_op=document_content_substrings_op,
+                           add_search_to_context=add_search_to_context,
+                           instruction=instruction,
+                           iinput=iinput,
+                           context=context,
+                           ntokens=None,
+                           tokens_persecond=None,
+                           llamacpp_dict=llamacpp_dict,
+                           ))
+    save_dict = dict(base_model=base_model, save_dir=save_dir, extra_dict=extra_dict)
+
     if do_langchain_path:
         text = ''
         sources = []
@@ -3472,19 +3540,6 @@ def evaluate(
         prompt_raw = ''
         # use smaller cut_distance for wiki_full since so many matches could be obtained, and often irrelevant unless close
         from gpt_langchain import run_qa_db
-        gen_hyper_langchain = dict(do_sample=do_sample,
-                                   temperature=temperature,
-                                   repetition_penalty=repetition_penalty,
-                                   top_p=top_p,
-                                   top_k=top_k,
-                                   penalty_alpha=penalty_alpha,
-                                   num_beams=num_beams,
-                                   min_new_tokens=min_new_tokens,
-                                   max_new_tokens=max_new_tokens,
-                                   early_stopping=early_stopping,
-                                   max_time=max_time,
-                                   num_return_sequences=num_return_sequences,
-                                   )
         loaders_dict, captions_model, asr_model = gr_to_lg(image_audio_loaders,
                                                            pdf_loaders,
                                                            url_loaders,
@@ -3590,7 +3645,7 @@ def evaluate(
                 hyde_show_only_final=hyde_show_only_final,
                 doc_json_mode=doc_json_mode,
 
-                **gen_hyper_langchain,
+                **gen_hyper_dict,
 
                 db_type=db_type,
                 n_jobs=n_jobs,
@@ -3620,45 +3675,22 @@ def evaluate(
             response_no_refs = r['response_no_refs']
             sources_str = r['sources_str']
             prompt_raw = str(r['prompt_raw'])
-            yield dict(response=response, sources=sources, save_dict=dict(), llm_answers=llm_answers,
-                       response_no_refs=response_no_refs, sources_str=sources_str, prompt_raw=prompt_raw)
-        if save_dir:
-            # estimate using tiktoken
-            extra_dict = gen_hyper_langchain.copy()
-            extra_dict.update(prompt_type=prompt_type,
-                              inference_server=inference_server,
-                              langchain_mode=langchain_mode,
-                              langchain_action=langchain_action,
-                              langchain_agents=langchain_agents,
-                              document_subset=document_subset,
-                              document_choice=document_choice,
-                              document_source_substrings=document_source_substrings,
-                              document_source_substrings_op=document_source_substrings_op,
-                              document_content_substrings=document_content_substrings,
-                              document_content_substrings_op=document_content_substrings_op,
-                              add_search_to_context=add_search_to_context,
-                              num_prompt_tokens=num_prompt_tokens,
-                              instruction=instruction,
-                              iinput=iinput,
-                              context=context,
-                              t_generate=time.time() - t_generate,
-                              ntokens=None,
-                              tokens_persecond=None,
-                              sources_str=sources_str,
-                              sources=sources,
-                              llamacpp_dict=llamacpp_dict,
-                              )
-            save_dict = dict(prompt=prompt,
-                             output=response, base_model=base_model, save_dir=save_dir,
-                             where_from='run_qa_db',
-                             extra_dict=extra_dict)
-            yield dict(response=response, sources=sources, save_dict=save_dict, llm_answers=llm_answers,
-                       response_no_refs=response_no_refs, sources_str=sources_str, prompt_raw=prompt_raw)
-            if verbose:
-                print(
-                    'Post-Generate Langchain: %s decoded_output: %s' %
-                    (str(datetime.now()), len(response) if response else -1),
-                    flush=True)
+            yield dict(response=response, sources=[], save_dict={}, llm_answers=llm_answers,
+                       response_no_refs=response_no_refs, sources_str='', prompt_raw='')
+        extra_dict.update(dict(num_prompt_tokens=num_prompt_tokens,
+                               t_generate=time.time() - t_generate,
+                               # tokens_persecond computed in save_generate_output
+                               sources_str=sources_str,
+                               sources=sources,
+                               ))
+        save_dict.update(dict(prompt=prompt, output=response, where_from="run_qa_db", extra_dict=extra_dict))
+        yield dict(response=response, sources=sources, save_dict=save_dict, llm_answers=llm_answers,
+                   response_no_refs=response_no_refs, sources_str=sources_str, prompt_raw=prompt_raw)
+        if verbose:
+            print(
+                'Post-Generate Langchain: %s decoded_output: %s' %
+                (str(datetime.now()), len(response) if response else -1),
+                flush=True)
         if response or sources or langchain_only_model:
             # if got no response (e.g. not showing sources and got no sources,
             # so nothing to give to LLM), then slip through and ask LLM
@@ -3699,11 +3731,14 @@ def evaluate(
                            max_total_input_tokens=max_total_input_tokens,
                            truncation_generation=truncation_generation,
                            gradio_server=gradio_server,
+                           attention_sinks=attention_sinks,
                            )
 
     if inference_server.startswith('vllm') or \
             inference_server.startswith('openai') or \
             inference_server.startswith('http'):
+        text = ''
+        gen_server_kwargs = {}
         if inference_server.startswith('vllm') or inference_server.startswith('openai'):
             assert not inference_server.startswith('openai_azure_chat'), "Not fo Azure, use langchain path"
             assert not inference_server.startswith('openai_azure'), "Not for Azure, use langchain path"
@@ -3750,8 +3785,6 @@ def evaluate(
                     text = responses.choices[0].text
                     response = prompter.get_response(prompt + text, prompt=prompt,
                                                      sanitize_bot_response=sanitize_bot_response)
-                    yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
                 else:
                     collected_events = []
                     tgen0 = time.time()
@@ -3762,8 +3795,8 @@ def evaluate(
                         if delta:
                             response = prompter.get_response(prompt + text, prompt=prompt,
                                                              sanitize_bot_response=sanitize_bot_response)
-                            yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                                       response_no_refs=response, sources_str='', prompt_raw=prompt)
+                            yield dict(response=response, sources=sources, save_dict={}, llm_answers={},
+                                       response_no_refs=response, sources_str='', prompt_raw='')
                         if time.time() - tgen0 > max_time:
                             if verbose:
                                 print("Took too long for OpenAI or VLLM: %s" % (time.time() - tgen0), flush=True)
@@ -3804,8 +3837,6 @@ def evaluate(
                     text = responses.choices[0].text  # FIXME: Untested
                     response = prompter.get_response(prompt + text, prompt=prompt,
                                                      sanitize_bot_response=sanitize_bot_response)
-                    yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
                 else:
                     tgen0 = time.time()
                     for chunk in responses:
@@ -3814,8 +3845,8 @@ def evaluate(
                             text += delta
                             response = prompter.get_response(prompt + text, prompt=prompt,
                                                              sanitize_bot_response=sanitize_bot_response)
-                            yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                                       response_no_refs=response, sources_str='', prompt_raw=prompt)
+                            yield dict(response=response, sources=sources, save_dict={}, llm_answers={},
+                                       response_no_refs=response, sources_str='', prompt_raw='')
                         if time.time() - tgen0 > max_time:
                             if verbose:
                                 print("Took too long for OpenAI or VLLM Chat: %s" % (time.time() - tgen0), flush=True)
@@ -3950,13 +3981,11 @@ def evaluate(
                     sources = res_dict['sources']
                     response = prompter.get_response(prompt + text, prompt=prompt,
                                                      sanitize_bot_response=sanitize_bot_response)
-                    yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
                 else:
                     from gradio_utils.grclient import check_job
                     job = gr_client.submit(str(dict(client_kwargs)), api_name=api_name)
-                    res_dict = dict(response=text, sources=sources, save_dict=dict(), llm_answers={},
-                                    response_no_refs=text, sources_str='', prompt_raw=prompt)
+                    res_dict = dict(response=text, sources=sources, save_dict={}, llm_answers={},
+                                    response_no_refs=text, sources_str='', prompt_raw='')
                     text0 = ''
                     tgen0 = time.time()
                     while not job.done():
@@ -3970,7 +3999,6 @@ def evaluate(
                             res = job.communicator.job.outputs[-1]
                             res_dict = ast.literal_eval(res)
                             text = res_dict['response']
-                            sources = res_dict['sources']
                             if gr_prompt_type == 'plain':
                                 # then gradio server passes back full prompt + text
                                 prompt_and_text = text
@@ -3985,8 +4013,8 @@ def evaluate(
                                 continue
                             # save old
                             text0 = response
-                            yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                                       response_no_refs=response, sources_str='', prompt_raw=prompt)
+                            yield dict(response=response, sources=sources, save_dict={}, llm_answers={},
+                                       response_no_refs=response, sources_str='', prompt_raw='')
                             if time.time() - tgen0 > max_time:
                                 if verbose:
                                     print("Took too long for Gradio: %s" % (time.time() - tgen0), flush=True)
@@ -4026,8 +4054,8 @@ def evaluate(
                         prompt_and_text = prompt + text
                     response = prompter.get_response(prompt_and_text, prompt=prompt,
                                                      sanitize_bot_response=sanitize_bot_response)
-                    yield dict(response=response, sources=sources, save_dict=dict(), error=strex, llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
+                    yield dict(response=response, sources=sources, save_dict={}, error=strex, llm_answers={},
+                               response_no_refs=response, sources_str='', prompt_raw='')
             elif hf_client:
                 # HF inference server needs control over input tokens
                 where_from = "hf_client"
@@ -4062,8 +4090,6 @@ def evaluate(
                     text = hf_client.generate(prompt, **gen_server_kwargs).generated_text
                     response = prompter.get_response(prompt + text, prompt=prompt,
                                                      sanitize_bot_response=sanitize_bot_response)
-                    yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
                 else:
                     tgen0 = time.time()
                     text = ""
@@ -4075,8 +4101,8 @@ def evaluate(
                             response = prompter.get_response(prompt + text, prompt=prompt,
                                                              sanitize_bot_response=sanitize_bot_response)
                             sources = []
-                            yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                                       response_no_refs=response, sources_str='', prompt_raw=prompt)
+                            yield dict(response=response, sources=sources, save_dict={}, llm_answers={},
+                                       response_no_refs=response, sources_str='', prompt_raw='')
                         if time.time() - tgen0 > max_time:
                             if verbose:
                                 print("Took too long for TGI: %s" % (time.time() - tgen0), flush=True)
@@ -4086,20 +4112,19 @@ def evaluate(
         else:
             raise RuntimeError("No such inference_server  %s" % inference_server)
 
-        if save_dir and text:
-            # save prompt + new text
-            extra_dict = gen_server_kwargs.copy()
-            extra_dict.update(dict(inference_server=inference_server,
-                                   num_prompt_tokens=num_prompt_tokens,
-                                   t_generate=time.time() - t_generate,
-                                   ntokens=None,
-                                   prompt_type=prompt_type,
-                                   tokens_persecond=None,
-                                   ))
-            save_dict = dict(prompt=prompt, output=text, base_model=base_model, save_dir=save_dir,
-                             where_from=where_from, extra_dict=extra_dict)
-            yield dict(response=response, sources=sources, save_dict=save_dict, llm_answers={},
-                       response_no_refs=response, sources_str='', prompt_raw=prompt)
+        # only return yield with save_dict and prompt_raw here to keep streaming light
+        extra_dict.update(gen_server_kwargs)
+        extra_dict.update(dict(inference_server=inference_server,  # changes in some cases
+                               num_prompt_tokens=num_prompt_tokens,
+                               t_generate=time.time() - t_generate,
+                               ntokens=None,
+                               prompt_type=prompt_type,
+                               tokens_persecond=None,
+                               ))
+        save_dict.update(dict(prompt=prompt, output=text, where_from=where_from, extra_dict=extra_dict))
+        # if not streaming, only place yield should be done
+        yield dict(response=response, sources=sources, save_dict=save_dict, llm_answers={},
+                   response_no_refs=response, sources_str='', prompt_raw=prompt)
         return
     else:
         assert not inference_server, "inference_server=%s not supported" % inference_server
@@ -4113,9 +4138,10 @@ def evaluate(
         # NOTE: uses max_length only
         sources = []
         response = model(prompt, max_length=max_new_tokens)[0][key]
-        yield dict(response=response, sources=sources, save_dict=dict(),
+        yield dict(response=response, sources=sources, save_dict=save_dict,
                    llm_answers={},
                    response_no_refs=response, sources_str='', prompt_raw=prompt)
+        return
 
     if 'mbart-' in base_model.lower():
         assert src_lang is not None
@@ -4188,6 +4214,12 @@ def evaluate(
                       max_time=max_time,
                       stopping_criteria=stopping_criteria,
                       )
+    if use_cache and attention_sinks:
+        from transformers import SinkCache
+        sink_dict['window_length'] = sink_dict.get('window_length', max_input_tokens)
+        sink_dict['num_sink_tokens'] = sink_dict.get('num_sink_tokens', 4)
+        cache = SinkCache(**sink_dict)
+        gen_kwargs.update(dict(past_key_values=cache))
     if 'gpt2' in base_model.lower():
         gen_kwargs.update(dict(bos_token_id=tokenizer.bos_token_id, pad_token_id=tokenizer.eos_token_id))
     elif 'mbart-' in base_model.lower():
@@ -4220,7 +4252,7 @@ def evaluate(
             context_class = NullContext  # if concurrency_count > 1 else filelock.FileLock
             if verbose:
                 print('Pre-Generate: %s' % str(datetime.now()), flush=True)
-            decoded_output = None
+            decoded_output = ''
             response = ''
             with context_class("generate.lock"):
                 if verbose:
@@ -4250,7 +4282,7 @@ def evaluate(
                             response = prompter.get_response(outputs, prompt=None,
                                                              only_new_text=True,
                                                              sanitize_bot_response=sanitize_bot_response)
-                            ret = dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
+                            ret = dict(response=response, sources=sources, save_dict=save_dict, llm_answers={},
                                        response_no_refs=response, sources_str='', prompt_raw=prompt)
                             if stream_output:
                                 yield ret
@@ -4258,8 +4290,10 @@ def evaluate(
                                 if verbose:
                                     print("Took too long for Torch: %s" % (time.time() - tgen0), flush=True)
                                 break
-                        # yield if anything left over as can happen (FIXME: Understand better)
-                        yield ret
+                        if stream_output:
+                            # will yield at end if required
+                            # yield if anything left over as can happen (FIXME: Understand better)
+                            yield ret
                     except BaseException:
                         # if any exception, raise that exception if was from thread, first
                         if thread.exc:
@@ -4290,23 +4324,23 @@ def evaluate(
                     response = prompter.get_response(outputs, prompt=None,
                                                      only_new_text=True,
                                                      sanitize_bot_response=sanitize_bot_response)
-                    yield dict(response=response, sources=sources, save_dict=dict(), llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
                     if outputs and len(outputs) >= 1:
                         decoded_output = prompt + outputs[0]
-                if save_dir and decoded_output:
-                    extra_dict = gen_config_kwargs.copy()
-                    extra_dict.update(dict(num_prompt_tokens=num_prompt_tokens,
-                                           t_generate=time.time() - t_generate,
-                                           ntokens=ntokens,
-                                           tokens_persecond=ntokens / (time.time() - t_generate),
-                                           prompt_type=prompt_type,
-                                           ))
-                    save_dict = dict(prompt=prompt, output=decoded_output, base_model=base_model, save_dir=save_dir,
-                                     where_from="evaluate_%s" % str(stream_output),
-                                     extra_dict=extra_dict)
-                    yield dict(response=response, sources=sources, save_dict=save_dict, llm_answers={},
-                               response_no_refs=response, sources_str='', prompt_raw=prompt)
+
+            # full return with save_dict and prompt_raw
+            # if not streaming, only place yield should be
+            extra_dict.update(gen_config_kwargs)
+            extra_dict.update(dict(num_prompt_tokens=num_prompt_tokens,
+                                   t_generate=time.time() - t_generate,
+                                   sources_str='',
+                                   ntokens=ntokens,
+                                   tokens_persecond=ntokens / (time.time() - t_generate),
+                                   ))
+            save_dict.update(dict(prompt=prompt, output=decoded_output,
+                                  where_from="evaluate_%s" % str(stream_output),
+                                  extra_dict=extra_dict))
+            yield dict(response=response, sources=sources, save_dict=save_dict, llm_answers={},
+                       response_no_refs=response, sources_str='', prompt_raw=prompt)
             if verbose:
                 print('Post-Generate: %s decoded_output: %s' % (
                     str(datetime.now()), len(decoded_output) if decoded_output else -1), flush=True)
@@ -4826,7 +4860,11 @@ def get_max_max_new_tokens(model_state, **kwargs):
         max_max_new_tokens = None
 
     if kwargs['max_max_new_tokens'] is not None and max_max_new_tokens is not None:
-        return min(max_max_new_tokens, kwargs['max_max_new_tokens'])
+        if kwargs.get('truncation_generation', False):
+            return min(max_max_new_tokens, kwargs['max_max_new_tokens'])
+        else:
+            # listen to max_max_new_tokens, ignore model limit
+            return max(max_max_new_tokens, kwargs['max_max_new_tokens'])
     elif kwargs['max_max_new_tokens'] is not None:
         return kwargs['max_max_new_tokens']
     elif kwargs['memory_restriction_level'] == 1:
@@ -5013,6 +5051,7 @@ def get_limited_prompt(instruction,
                        max_total_input_tokens=-1,
                        truncation_generation=False,
                        gradio_server=False,
+                       attention_sinks=False,
                        ):
     if gradio_server or not inference_server:
         # can listen to truncation_generation
@@ -5027,11 +5066,15 @@ def get_limited_prompt(instruction,
     if chat_conversation is None:
         chat_conversation = []
 
-    if max_input_tokens >= 0:
-        # max_input_tokens is used to runtime (via client/UI) to control actual filling of context
-        max_input_tokens = min(model_max_length - min_max_new_tokens, max_input_tokens)
+    if not attention_sinks:
+        if max_input_tokens >= 0:
+            # max_input_tokens is used to runtime (via client/UI) to control actual filling of context
+            max_input_tokens = min(model_max_length - min_max_new_tokens, max_input_tokens)
+        else:
+            max_input_tokens = model_max_length - min_max_new_tokens
     else:
-        max_input_tokens = model_max_length - min_max_new_tokens
+        if max_input_tokens < 0:
+            max_input_tokens = model_max_length
 
     if prompter:
         prompt_type = prompter.prompt_type

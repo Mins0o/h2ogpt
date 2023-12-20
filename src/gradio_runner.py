@@ -166,6 +166,7 @@ def get_prompt_type2(is_public, **kwargs):
 
 
 def go_gradio(**kwargs):
+    page_title = kwargs['page_title']
     allow_api = kwargs['allow_api']
     is_public = kwargs['is_public']
     is_hf = kwargs['is_hf']
@@ -263,7 +264,7 @@ def go_gradio(**kwargs):
                                  radius_size=gr.themes.sizes.spacing_md))
 
     theme = H2oTheme(**theme_kwargs) if kwargs['h2ocolors'] else SoftTheme(**theme_kwargs)
-    demo = gr.Blocks(theme=theme, css=css_code, title="memesoogpt - powered by h2ogpt", analytics_enabled=False)
+    demo = gr.Blocks(theme=theme, css=css_code, title=page_title, analytics_enabled=False)
     callback = gr.CSVLogger()
 
     # modify, if model lock then don't show models, then need prompts in expert
@@ -907,7 +908,7 @@ def go_gradio(**kwargs):
                             allowed_actions,
                             value=default_action,
                             label="Action",
-                            visible=True)
+                            visible=len(allowed_actions) > 1)
                     allowed_agents = [x for x in langchain_agents_list if x in visible_langchain_agents]
                     if os.getenv('OPENAI_API_KEY') is None and LangChainAgent.JSON.value in allowed_agents:
                         allowed_agents.remove(LangChainAgent.JSON.value)
@@ -921,7 +922,7 @@ def go_gradio(**kwargs):
                         label="Agents",
                         multiselect=True,
                         interactive=True,
-                        visible=not is_public,
+                        visible=not is_public and len(allowed_agents) > 0,
                         elem_id="langchain_agents",
                         filterable=False)
 
@@ -1448,10 +1449,10 @@ def go_gradio(**kwargs):
                                                        info="Set env CRAWL_DEPTH to control depth for Scrape, default is 1 (given page + links on that page)",
                                                        value=url_loaders_options0)
                         jq_schema = gr.Textbox(label="JSON jq_schema", value=jq_schema0)
-                        extract_frames = gr.Number(value=kwargs['extract_frames'] if not is_public else 5,
-                                                   precision=0,
+                        extract_frames = gr.Slider(value=kwargs['extract_frames'] if not is_public else 5,
+                                                   step=1,
                                                    minimum=0,
-                                                   maximum=5 if is_public else max(kwargs['extract_frames'], 200),
+                                                   maximum=5 if is_public else max(kwargs['extract_frames'], 1000),
                                                    label="Number of unique images to extract from videos",
                                                    info="If 0, just audio extracted if enabled",
                                                    visible=have_fiftyone)
@@ -3484,7 +3485,7 @@ def go_gradio(**kwargs):
                 valid_key, h2ogpt_key1, \
                 max_time1, stream_output1, \
                 chatbot_role1, speaker1, tts_language1, roles_state1, tts_speed1, langchain_action1 = \
-                prep_bot(*args_list_bot, kwargs_eval=kwargs1)
+                prep_bot(*args_list_bot, kwargs_eval=kwargs1, plain_api=plain_api)
 
             save_dict = dict()
             ret = {}
@@ -3598,6 +3599,8 @@ def go_gradio(**kwargs):
                         # collect unstreamed audios
                         audios.append(res_dict['audio'])
                     if time.time() - tgen0 > max_time1 + 10:  # don't use actual, so inner has chance to complete
+                        if str_api:
+                            res_dict['save_dict']['extra_dict']['timeout'] = time.time() - tgen0
                         if verbose:
                             print("Took too long evaluate_nochat: %s" % (time.time() - tgen0), flush=True)
                         break
@@ -3891,7 +3894,7 @@ def go_gradio(**kwargs):
             else:
                 return 2000
 
-        def prep_bot(*args, retry=False, which_model=0, kwargs_eval=None):
+        def prep_bot(*args, retry=False, which_model=0, kwargs_eval=None, plain_api=False):
             """
 
             :param args:
@@ -3939,7 +3942,8 @@ def go_gradio(**kwargs):
                 max_time1, stream_output1, chatbot_role1, speaker1, tts_language1, roles_state1, tts_speed1, \
                 langchain_action1
 
-            if model_state1['model'] is None or model_state1['model'] == no_model_str:
+            if not plain_api and (model_state1['model'] is None or model_state1['model'] == no_model_str):
+                # plain_api has no state, let evaluate() handle switch
                 return dummy_return
 
             args_list = args_list[:-isize]  # only keep rest needed for evaluate()
@@ -4227,6 +4231,9 @@ def go_gradio(**kwargs):
                 final_audio = combine_audios(audios, audio=no_audio,
                                              expect_bytes=kwargs['return_as_byte'])
                 yield history, error, final_audio
+            except BaseException as e:
+                print("evaluate_nochat exception: %s: %s" % (str(e), str(args)), flush=True)
+                raise
             finally:
                 clear_torch_cache(allow_skip=True)
                 clear_embeddings(langchain_mode1, db1)
@@ -5011,7 +5018,8 @@ def go_gradio(**kwargs):
             # switch-a-roo on base_model so can pass GGUF/GGML as base model
             model_name0 = model_name
             model_name, model_path_llama1, load_gptq, load_awq, n_gqa1 = \
-                switch_a_roo_llama(model_name, model_path_llama1, load_gptq, load_awq, n_gqa1)
+                switch_a_roo_llama(model_name, model_path_llama1, load_gptq, load_awq, n_gqa1,
+                                   kwargs['llamacpp_path'])
 
             # after getting results, we always keep all items related to llama.cpp, gptj, gpt4all inside llamacpp_dict
             llamacpp_dict = str_to_dict(llamacpp_dict_more1)
@@ -5608,8 +5616,8 @@ def go_gradio(**kwargs):
                 load_event7 = load_event6.then(**viewable_kwargs)
 
     demo.queue(**queue_kwargs, api_open=kwargs['api_open'])
-    favicon_file = "MeIcon.jpg"
-    favicon_path = favicon_file
+    favicon_file = "h2o-logo.svg"
+    favicon_path = kwargs['favicon_path'] or favicon_file
     if not os.path.isfile(favicon_file):
         print("favicon_path1=%s not found" % favicon_file, flush=True)
         alt_path = os.path.dirname(os.path.abspath(__file__))

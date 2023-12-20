@@ -200,6 +200,8 @@ class GradioClient(Client):
 
         if is_gradio_client_version7:
             protocol = self.config.get("protocol")
+            from gradio_client.client import EndpointV3Compatibility
+
             endpoint_class = Endpoint if protocol == "sse" else EndpointV3Compatibility
         else:
             endpoint_class = Endpoint
@@ -227,7 +229,9 @@ class GradioClient(Client):
         Get server hash using super without any refresh action triggered
         Returns: git hash of gradio server
         """
-        return super().submit(api_name="/system_hash").result()
+        # return super().submit(api_name="/system_hash").result()
+        # disable for helium for now, just return constant value if not in github repo
+        return "GET_GITHASH"
 
     def refresh_client_if_should(self, persist=True):
         if self.config is None:
@@ -584,7 +588,7 @@ class GradioClient(Client):
         # chunking not used here
         # MyData specifies scratch space, only persisted for this individual client call
         langchain_mode = langchain_mode or "MyData"
-        loaders = tuple([None, None, None, None])
+        loaders = tuple([None, None, None, None, None])
         doc_options = tuple([langchain_mode, chunk, chunk_size, embed])
         asserts |= bool(os.getenv("HARD_ASSERTS", False))
         if (
@@ -738,8 +742,6 @@ class GradioClient(Client):
                             res = job.communicator.job.outputs[-1]
                             res_dict = ast.literal_eval(res)
                             response = res_dict["response"]  # keeps growing
-                            sources = res_dict["sources"]
-                            texts_out = [x["content"] for x in sources]
                             text_chunk = response[len(text0):]  # only keep new stuff
                             if not text_chunk:
                                 time.sleep(0.001)

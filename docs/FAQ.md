@@ -28,7 +28,7 @@ NOTE: For long-context input or large max_seq_len, Mixtral GGUF seems unstable a
 ### Video Extraction (experimental)
 
 Ways to get Audio (ASR) and Video extraction:
-* Add Youtube link to Ask Anything and click Ingest
+* Add YouTube link to Ask Anything and click Ingest
 * Upload video file clicking Upload and selecting your video
 
 By default, image frames are extracted as a separate document, so when viewed in document viewer, the images are shown.  If you prefer them under the same document, set env `FRAMES_AS_SAME_DOC=1`.
@@ -334,7 +334,7 @@ As listed in the `src/gen.py` file, there are many ways to control authorization
 *  :param auth: gradio auth for launcher in form [(user1, pass1), (user2, pass2), ...]
     * e.g. --auth=[('jon','password')] with no spaces
     * e.g. --auth="[('jon', 'password)())(')]" so any special characters can be used
-    * e.g. --auth=auth.json to specify persisted state file with name auth.json (auth_filename then not required)
+    * e.g. --auth=auth.json to specify persisted state file with name auth.json (auth_filename then not required),
     * e.g. --auth='' will use default auth.json as file name for persisted state file (auth_filename then not required)
     * e.g. --auth=None will use no auth, but still keep track of auth state, just not from logins
 *    :param auth_filename:
@@ -346,6 +346,70 @@ As listed in the `src/gen.py` file, there are many ways to control authorization
 *   :param auth_message: Message to show if having users login, fixed if passed, else dynamic internally
 *   :param guest_name: guess name if using auth and have open access.
     * If '', then no guest allowed even if open access, then all databases for each user always persisted
+
+The file format for `auth.json` in basic form is:
+```json
+{
+  "user1": {
+    "userid": "any_unique_value",
+    "password": "login_password",
+  },
+  "user2": {
+    "userid": "any_unique_value",
+    "password": "login_password",
+  },
+}
+```
+while more generally it is updated by h2oGPT to contain other entries, for example for single user `username`:
+```json
+  "username": {
+    "password": "username",
+    "userid": "9078ac9c-8ccf-481a-8de3-d6ccd21fd1c3",
+    "selection_docs_state": {
+      "langchain_modes": [
+        "UserData",
+        "MyData",
+        "LLM",
+        "Disabled"
+      ],
+      "langchain_mode_paths": {
+        "UserData": null
+      },
+      "langchain_mode_types": {
+        "UserData": "shared",
+        "github h2oGPT": "shared",
+        "DriverlessAI docs": "shared",
+        "wiki": "shared",
+        "wiki_full": "",
+        "MyData": "personal",
+        "LLM": "either",
+        "Disabled": "either"
+      }
+    },
+    "chat_state": {
+      "Say a color": [
+        [],
+        [],
+        [
+          [
+            "Say a color",
+            "I do not have the ability to speak, but I can tell you that a color is a hue, tone, or shade that is perceived by the human eye and identified by a name. Some common colors include red, orange, yellow, green, blue, indigo, and violet."
+          ]
+        ]
+      ]
+    },
+    "text_outputs": [
+      [
+        [
+          [
+            "Say a color",
+            "I do not have the ability to speak, but I can tell you that a color is a hue, tone, or shade that is perceived by the human eye and identified by a name. Some common colors include red, orange, yellow, green, blue, indigo, and violet."
+          ]
+        ]
+      ]
+    ]
+  }
+```
 
 ### HTTPS access for server and client
 
@@ -533,6 +597,12 @@ and in some cases one has to disable certain features that are not automatically
 CUDA_VISIBLE_DEVICES=0 python generate.py --base_model=TheBloke/Xwin-LM-13B-v0.2-GPTQ --load_gptq=model --use_safetensors=True --prompt_type=xwin --langchain_mode=UserData --score_model=None --share=False --gradio_offline_level=1 --gptq_dict="{'disable_exllama': True}"
 ```
 
+For Mixtral on 4 A6000 uses about 8-11GB per GPU:
+```bash
+python generate.py --base_model=TheBloke/Mixtral-8x7B-Instruct-v0.1-GPTQ --prompt_type=mistral --use_gpu_id=False --score_model=None --use_autogptq=True --load_gptq=model --use_safetensors=True
+```
+NOTE: After quantization report, it takes about 4 minutes on fast system to fully load for whatever reason, without any change to GPU or CPU memory usage.
+
 For AutoGPTQ and other models, h2oGPT tries to automatically handle models needing certain exllama options.
 
 ##### AWQ
@@ -602,14 +672,13 @@ Exllama is supported using `load_exllama` bool, with additional control using `e
 
 Attention sinks is supported, like:
 ```bash
-pip install git+https://github.com/tomaarsen/attention_sinks.git
-python generate.py --base_model=mistralai/Mistral-7B-Instruct-v0.1 --score_model=None --attention_sinks=True --max_new_tokens=100000 --max_max_new_tokens=100000 --top_k_docs=-1 --use_gpu_id=False --max_seq_len=4096 --sink_dict="{'attention_sink_size': 4, 'attention_sink_window_size': 4096}"
+python generate.py --base_model=mistralai/Mistral-7B-Instruct-v0.1 --score_model=None --attention_sinks=True --max_new_tokens=100000 --max_max_new_tokens=100000 --top_k_docs=-1 --use_gpu_id=False --max_seq_len=4096 --sink_dict="{'num_sink_tokens': 4, 'window_length': 4096}"
 ```
-where the attention sink window has to be larger than any prompt input else failures will occur.  If one sets `max_input_tokens` then this will restrict the input tokens and that can be set to same value as `attention_sink_window_size`.
+where the attention sink window has to be larger than any prompt input else failures will occur.  If one sets `max_input_tokens` then this will restrict the input tokens and that can be set to same value as `window_length`.
 
 One can increase `--max_seq_len=4096` for Mistral up to maximum of `32768` if GPU has enough memory, or reduce to lower memory needs from input itself, but still get efficient generation of new tokens "without limit".  E.g.
 ```bash
---base_model=mistralai/Mistral-7B-Instruct-v0.1 --score_model=None --attention_sinks=True --max_new_tokens=100000 --max_max_new_tokens=100000 --top_k_docs=-1 --use_gpu_id=False --max_seq_len=8192 --sink_dict="{'attention_sink_size': 4, 'attention_sink_window_size': 8192}"
+--base_model=mistralai/Mistral-7B-Instruct-v0.1 --score_model=None --attention_sinks=True --max_new_tokens=100000 --max_max_new_tokens=100000 --top_k_docs=-1 --use_gpu_id=False --max_seq_len=8192 --sink_dict="{'num_sink_tokens': 4, 'window_length': 8192}"
 ```
 
 One can also set `--min_new_tokens` on CLI or in UI to some larger value, but this is risky as it ignores end of sentence token and may do poorly after.  Better to improve prompt, and this is most useful when already consumed context with input from documents (e.g. `top_k_docs=-1`) and still want long generation.  Attention sinks is not yet supported for llama.cpp type models or vLLM/TGI inference servers.

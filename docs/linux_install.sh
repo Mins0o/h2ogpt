@@ -117,9 +117,9 @@ fi
 #    ```
 #* GPU Optional: For AutoGPTQ support on x86_64 linux
 #    ```bash
-    pip uninstall -y auto-gptq ; pip install auto-gptq==0.5.1 --extra-index-url https://huggingface.github.io/autogptq-index/whl/cu118/
+    pip uninstall -y auto-gptq ; pip install auto-gptq==0.6.0 --extra-index-url https://huggingface.github.io/autogptq-index/whl/cu118/
     # in-transformers support of AutoGPTQ, requires also auto-gptq above to be installed since used internally by transformers/optimum
-    pip install optimum==1.14.1
+    pip install optimum==1.16.1
 #    ```
 #    See [AutoGPTQ](README_GPU.md#autogptq) about running AutoGPT models.
 #* GPU Optional: For AutoAWQ support on x86_64 linux
@@ -198,6 +198,10 @@ fi
   #sed -i 's/async for line in response.aiter_text():/async for line in response.aiter_lines():\n                if len(line) == 0:\n                    continue\n                if line == """{"detail":"Not Found"}""":\n                    continue/g' gradio_client/utils.py
   cd $pwd0
 #    ```
+
+# fix pytube to avoid errors for restricted content
+sp=`python3.10 -c 'import site; print(site.getsitepackages()[0])'`
+sed -i "s/client='ANDROID_MUSIC'/client='ANDROID'/g" $sp/pytube/innertube.py
 
 #* PDF View support
 #   ```bash
