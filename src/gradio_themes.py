@@ -152,8 +152,8 @@ class SoftTheme(Soft):
     def __init__(
             self,
             *,
-            primary_hue: colors.Color | str = colors.indigo,
-            secondary_hue: colors.Color | str = colors.indigo,
+            primary_hue: colors.Color | str = colors.teal,
+            secondary_hue: colors.Color | str = colors.sky,
             neutral_hue: colors.Color | str = colors.gray,
             spacing_size: sizes.Size | str = sizes.spacing_md,
             radius_size: sizes.Size | str = sizes.radius_md,

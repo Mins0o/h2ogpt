@@ -20,6 +20,7 @@ fi
     # broad support, but no training-time or data creation dependencies
 
     pip install -r requirements.txt
+    pip install -U duckduckgo-search
 #    ```
 #* Optional: Install document question-answer dependencies:
 #    ```bash

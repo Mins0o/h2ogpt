@@ -26,9 +26,7 @@ ARG gid=1000
 
 RUN groupadd -g ${gid} ${group} && useradd -u ${uid} -g ${group} -s /bin/bash ${user}
 
-EXPOSE 8888
 EXPOSE 7860
-EXPOSE 5000
 
 USER h2ogpt
 

@@ -998,6 +998,43 @@ def go_gradio(**kwargs):
                         # CHAT
                         col_chat = gr.Column(visible=kwargs['chat'])
                         with col_chat:
+                            text_output, text_output2, text_outputs = make_chatbots(output_label0, output_label0_model2,
+                                                                                    **kwargs)
+
+                            with gr.Row():
+                                with gr.Column(visible=kwargs['score_model']):
+                                    score_text = gr.Textbox(res_value,
+                                                            show_label=False,
+                                                            visible=True)
+                                    score_text2 = gr.Textbox("Response Score2: NA", show_label=False,
+                                                             visible=False and not kwargs['model_lock'])
+
+                            visible_model_choice = bool(kwargs['model_lock']) and \
+                                                   len(model_states) > 1 and \
+                                                   kwargs['visible_visible_models']
+                            with gr.Row(visible=not kwargs['actions_in_sidebar'] or visible_model_choice):
+                                visible_models = gr.Dropdown(kwargs['all_possible_visible_models'],
+                                                             label="Visible Models",
+                                                             value=visible_models_state0,
+                                                             interactive=True,
+                                                             multiselect=True,
+                                                             visible=visible_model_choice,
+                                                             elem_id="multi-selection",
+                                                             filterable=False,
+                                                             )
+                                mw0 = 100
+                                with gr.Column(min_width=mw0):
+                                    if not kwargs['actions_in_sidebar']:
+                                        langchain_action = gr.Radio(
+                                            allowed_actions,
+                                            value=default_action,
+                                            label='Action',
+                                            show_label=visible_model_choice,
+                                            visible=True,
+                                            min_width=mw0)
+
+
+
                             with gr.Row():
                                 with gr.Column(scale=50):
                                     with gr.Row(elem_id="prompt-form-row"):
@@ -1140,41 +1177,6 @@ def go_gradio(**kwargs):
                                             .then(fn=lambda: None, **submit_kwargs)
                                         stop_text.change(fn=clear_audio_state, outputs=audio_state) \
                                             .then(fn=lambda: None, **stop_kwargs)
-
-                            visible_model_choice = bool(kwargs['model_lock']) and \
-                                                   len(model_states) > 1 and \
-                                                   kwargs['visible_visible_models']
-                            with gr.Row(visible=not kwargs['actions_in_sidebar'] or visible_model_choice):
-                                visible_models = gr.Dropdown(kwargs['all_possible_visible_models'],
-                                                             label="Visible Models",
-                                                             value=visible_models_state0,
-                                                             interactive=True,
-                                                             multiselect=True,
-                                                             visible=visible_model_choice,
-                                                             elem_id="multi-selection",
-                                                             filterable=False,
-                                                             )
-                                mw0 = 100
-                                with gr.Column(min_width=mw0):
-                                    if not kwargs['actions_in_sidebar']:
-                                        langchain_action = gr.Radio(
-                                            allowed_actions,
-                                            value=default_action,
-                                            label='Action',
-                                            show_label=visible_model_choice,
-                                            visible=True,
-                                            min_width=mw0)
-
-                            text_output, text_output2, text_outputs = make_chatbots(output_label0, output_label0_model2,
-                                                                                    **kwargs)
-
-                            with gr.Row():
-                                with gr.Column(visible=kwargs['score_model']):
-                                    score_text = gr.Textbox(res_value,
-                                                            show_label=False,
-                                                            visible=True)
-                                    score_text2 = gr.Textbox("Response Score2: NA", show_label=False,
-                                                             visible=False and not kwargs['model_lock'])
 
                 doc_selection_tab = gr.TabItem("Document Selection") \
                     if kwargs['visible_doc_selection_tab'] else gr.Row(visible=False)
