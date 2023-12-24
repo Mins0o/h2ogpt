@@ -23,6 +23,7 @@ apt-get install -y \
     libreoffice \
     autoconf \
     libtool \
+    tree \
     libtcmalloc-minimal4
 
 # Run upgrades
@@ -107,3 +108,5 @@ chmod -R a+rwx /workspace/save
 # Cleanup
 rm -rf /workspace/Miniconda3-py310_23.1.0-1-Linux-x86_64.sh
 rm -rf /workspace/.cache/pip
+
+chown -R h2ogpt /workspace
