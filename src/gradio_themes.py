@@ -199,6 +199,9 @@ def get_h2o_title(title, description, visible_h2ogpt_qrcode):
                     <div style="height: 60px; width: 60px; margin-right:20px;"></div>
                     <h1 style="line-height:60px">{title}</h1>
                 </div>
+                <div style="display:flex; justify-content:center;">
+                    <a href="https://github.com/h2oai/h2ogpt/blob/main/docs/README_ui.md">how to use</a>
+                </div>
                 """
     if visible_h2ogpt_qrcode:
         ret += """
@@ -210,7 +213,10 @@ def get_h2o_title(title, description, visible_h2ogpt_qrcode):
 
 
 def get_simple_title(title, description):
-    return f"""{description}<h1 align="center"> {title}</h1>"""
+    return f"""{description}<h1 align="center"> {title}</h1>
+                <div style="display:flex; justify-content:center;">
+                    <a href="https://github.com/h2oai/h2ogpt/blob/main/docs/README_ui.md">how to use</a>
+                </div>"""
 
 
 def get_dark_js() -> str:

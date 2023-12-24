@@ -1126,8 +1126,8 @@ def go_gradio(**kwargs):
                                     with gr.Column(min_width=mw1):
                                         submit = gr.Button(value='Submit', variant='primary', size='sm',
                                                            min_width=mw1, elem_id="submit")
-                                        stop_btn = gr.Button(value="Stop", variant='secondary', size='sm',
-                                                             min_width=mw1, elem_id='stop')
+                                        # stop_btn = gr.Button(value="Stop", variant='secondary', size='sm',
+                                        #                      min_width=mw1, elem_id='stop')
                                         save_chat_btn = gr.Button("Save", size='sm', min_width=mw1)
                                     with gr.Column(min_width=mw2):
                                         retry_btn = gr.Button("Redo", size='sm', min_width=mw2)
@@ -5571,23 +5571,23 @@ def go_gradio(**kwargs):
         # don't pass text_output, don't want to clear output, just stop it
         # cancel only stops outer generation, not inner generation or non-generation
         clear_torch_cache_func_soft = functools.partial(clear_torch_cache, allow_skip=True)
-        stop_event = stop_btn.click(lambda: None, None, None,
-                                    cancels=submits1 + submits2 + submits3 + submits4 +
-                                            [submit_event_nochat, submit_event_nochat2] +
-                                            [eventdb1, eventdb2, eventdb3] +
-                                            [eventdb7a, eventdb7, eventdb8a, eventdb8, eventdb9a, eventdb9, eventdb12a,
-                                             eventdb12] +
-                                            db_events +
-                                            [eventdbloadla, eventdbloadlb] +
-                                            [clear_event] +
-                                            [submit_event_nochat_api, submit_event_nochat] +
-                                            [load_model_event, load_model_event2] +
-                                            [count_tokens_event] +
-                                            speak_events
-                                    ,
-                                    **noqueue_kwargs, api_name='stop' if allow_api else None) \
-            .then(clear_torch_cache_func_soft, **noqueue_kwargs) \
-            .then(stop_audio_func, outputs=[speech_human, speech_bot])
+        # stop_event = stop_btn.click(lambda: None, None, None,
+        #                             cancels=submits1 + submits2 + submits3 + submits4 +
+        #                                     [submit_event_nochat, submit_event_nochat2] +
+        #                                     [eventdb1, eventdb2, eventdb3] +
+        #                                     [eventdb7a, eventdb7, eventdb8a, eventdb8, eventdb9a, eventdb9, eventdb12a,
+        #                                      eventdb12] +
+        #                                     db_events +
+        #                                     [eventdbloadla, eventdbloadlb] +
+        #                                     [clear_event] +
+        #                                     [submit_event_nochat_api, submit_event_nochat] +
+        #                                     [load_model_event, load_model_event2] +
+        #                                     [count_tokens_event] +
+        #                                     speak_events
+        #                             ,
+        #                             **noqueue_kwargs, api_name='stop' if allow_api else None) \
+        #     .then(clear_torch_cache_func_soft, **noqueue_kwargs) \
+        #     .then(stop_audio_func, outputs=[speech_human, speech_bot])
 
         if kwargs['auth'] is not None:
             auth = authf
