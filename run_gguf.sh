@@ -6,16 +6,16 @@ if [ -z ${LLAMA_MODEL_NAME} ];
         LLAMA_MODEL_NAME='wizardlm-1.0-uncensored-llama2-13b.Q5_K_M.gguf'
         PROMPT_TYPE='vicuna11'
     else
-        echo 'LLAMA_MODEL_NAME is set to $LLAMA_MODEL_NAME'
+        echo "LLAMA_MODEL_NAME is set to $LLAMA_MODEL_NAME"
 fi
 
 if [ -z ${PROMPT_TYPE} ];
     then 
         echo 'PROMPT_TYPE is unset or set to blank';
         echo 'Setting it to default llama'
-        PROMPT_TYPE='llama'
+        set PROMPT_TYPE='llama'
     else
-        echo 'PROMPT_TYPE is set to $PROMPT_TYPE'
+        echo "PROMPT_TYPE is set to $PROMPT_TYPE"
 fi
 
 #openassistanc - open_assistant
@@ -26,7 +26,7 @@ fi
 H2OGPT_ENABLE_HEAP_ANALYTICS=False HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
 python generate.py \
 --enable_heap_analytics=False \
---prepare_offline_level=2 \
+--gradio_offline_level=2 \
 --base_model=llama \
 --model_path_llama=model_collection/${LLAMA_MODEL_NAME} \
 --llamacpp_dict="{'n_gpu_layers':12}" \

@@ -13,9 +13,16 @@ ENV TIKTOKEN_CACHE_DIR=/workspace/tiktoken_cache
 
 WORKDIR /workspace
 
-COPY . /workspace/
+COPY ./docs /workspace/docs
+COPY ./requirements.txt /workspace/requirements.txt
+COPY ./reqs_optional /workspace/reqs_optional
+COPY ./docker_build_script_ubuntu.sh /workspace/docker_build_script_ubuntu.sh
+COPY ./Makefile /workspace/Makefile
+COPY ./version.txt /workspace/version.txt
 
-RUN cd /workspace && ./docker_build_script_ubuntu.sh
+RUN cd /workspace && ./docker_build_script_ubuntu.sh 
+
+COPY . /workspace/
 
 RUN chmod -R a+rwx /workspace
 
