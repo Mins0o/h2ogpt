@@ -24,6 +24,7 @@ apt-get install -y \
     autoconf \
     libtool \
     tree \
+    libvulkan1 \
     libtcmalloc-minimal4
 
 # Run upgrades
@@ -109,4 +110,4 @@ chmod -R a+rwx /workspace/save
 rm -rf /workspace/Miniconda3-py310_23.1.0-1-Linux-x86_64.sh
 rm -rf /workspace/.cache/pip
 
-chown -R h2ogpt /workspace
+chown -R h2ogpt:h2ogpt /workspace
