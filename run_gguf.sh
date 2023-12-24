@@ -45,6 +45,7 @@ python generate.py \
 --visible_login_tab=False \
 --visible_models_tab=False \
 --visible_langchain_agents='[]' \
+--height=450 \
 --auth='/workspace/h2ogpt_auth/auth.json' \
 --auth_message='!!DO NOT USE REALWORLD PSWD!! 
 The login is for persisting session. 
